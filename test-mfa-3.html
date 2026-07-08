@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test MFA Supabase - GHULABE</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 500px; margin: 20px auto; padding: 0 15px; background:#111; color:#eee; }
+  h2 { color:#4ade80; }
+  input { width:100%; padding:10px; margin:5px 0; box-sizing:border-box; background:#222; color:#fff; border:1px solid #444; border-radius:6px; }
+  button { width:100%; padding:12px; margin:8px 0; background:#4ade80; color:#000; border:none; border-radius:6px; font-weight:bold; }
+  button:disabled { background:#555; }
+  pre { background:#000; color:#0f0; padding:10px; border-radius:6px; white-space:pre-wrap; word-break:break-all; font-size:12px; }
+  .section { border:1px solid #333; border-radius:8px; padding:15px; margin-bottom:15px; }
+  img { max-width:200px; display:block; margin:10px auto; }
+</style>
+</head>
+<body>
+
+<h2>🔐 Test Auth + MFA - GHULABE</h2>
+
+<div class="section">
+  <h3>1. Connexion</h3>
+  <input id="email" type="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Mot de passe">
+  <button onclick="login()">Se connecter</button>
+</div>
+
+<div class="section">
+  <h3>2. Enrôlement MFA</h3>
+  <button onclick="enrollMFA()">Démarrer MFA Enroll</button>
+  <div id="qr-container"></div>
+  <input id="mfa-code" type="text" placeholder="Code à 6 chiffres" maxlength="6">
+  <button onclick="verifyMFA()">Vérifier code</button>
+</div>
+
+<div class="section">
+  <h3>Résultat / Logs</h3>
+  <pre id="log">En attente...</pre>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ycnugbfkfytrasvimgxg.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljbnVnYmZrZnl0cmFzdmltZ3hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTk5MDcsImV4cCI6MjA5ODIzNTkwN30.xO7CW-wm9YB5XB3RbUR-mGzeZI06cO_07NNkFKeX_7U";
+
+  let sb = null;
+  let factorId = null;
+
+  window.addEventListener("load", () => {
+    if (typeof window.supabase === "undefined") {
+      document.getElementById("log").textContent = "ERREUR CRITIQUE: la librairie Supabase (CDN) n'a pas pu charger. Vérifie ta connexion internet.";
+      return;
+    }
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    log("Librairie Supabase chargée ✅ Prêt.");
+  });
+
+  function log(msg) {
+    const el = document.getElementById("log");
+    const timestamp = new Date().toLocaleTimeString();
+    el.textContent = `[${timestamp}] ` + (typeof msg === "string" ? msg : JSON.stringify(msg, null, 2)) + "\n\n" + el.textContent;
+  }
+
+  async function login() {
+    if (!sb) { log("Supabase pas encore prêt, attends 2 secondes et réessaie."); return; }
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    log("Tentative de connexion pour: " + email);
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) {
+        log("ERREUR LOGIN: " + error.message);
+      } else {
+        log("Connexion réussie ✅ User ID: " + data.user.id);
+      }
+    } catch (err) {
+      log("EXCEPTION LOGIN: " + err.message);
+    }
+  }
+
+  async function enrollMFA() {
+    if (!sb) { log("Supabase pas encore prêt, attends 2 secondes et réessaie."); return; }
+    log("Démarrage MFA enroll...");
+    try {
+      const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp" });
+      if (error) {
+        log("ERREUR MFA ENROLL: " + error.message);
+        return;
+      }
+      factorId = data.id;
+      log("MFA Enroll OK ✅ Factor ID: " + factorId);
+      document.getElementById("qr-container").innerHTML =
+        `<img src="${data.totp.qr_code}" alt="QR Code MFA"><p style="font-size:11px;word-break:break-all;">Secret: ${data.totp.secret}</p>`;
+    } catch (err) {
+      log("EXCEPTION MFA ENROLL: " + err.message);
+    }
+  }
+
+  async function verifyMFA() {
+    if (!sb) { log("Supabase pas encore prêt, attends 2 secondes et réessaie."); return; }
+    const code = document.getElementById("mfa-code").value;
+    if (!factorId) {
+      log("Aucun factorId - lance d'abord 'Démarrer MFA Enroll'");
+      return;
+    }
+    log("Vérification du code...");
+    try {
+      const { data: challenge, error: challengeError } = await sb.auth.mfa.challenge({ factorId });
+      if (challengeError) {
+        log("ERREUR CHALLENGE: " + challengeError.message);
+        return;
+      }
+      const { data, error } = await sb.auth.mfa.verify({
+        factorId,
+        challengeId: challenge.id,
+        code
+      });
+      if (error) {
+        log("ERREUR VERIFY: " + error.message);
+      } else {
+        log("MFA VÉRIFIÉ ✅ " + JSON.stringify(data));
+      }
+    } catch (err) {
+      log("EXCEPTION VERIFY: " + err.message);
+    }
+  }
+</script>
+
+</body>
+</html>
