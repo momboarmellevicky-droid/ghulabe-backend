@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Générateur TOTP - Test GHULABE</title>
+<style>
+  body { font-family: sans-serif; max-width: 500px; margin: 20px auto; padding: 0 15px; background:#111; color:#eee; }
+  h2 { color:#4ade80; }
+  input { width:100%; padding:10px; margin:5px 0; box-sizing:border-box; background:#222; color:#fff; border:1px solid #444; border-radius:6px; font-size:14px; }
+  .code { font-size:3rem; text-align:center; letter-spacing:8px; color:#4ade80; font-weight:bold; margin:20px 0; }
+  .timer { text-align:center; color:#888; }
+  .bar { height:6px; background:#333; border-radius:3px; overflow:hidden; margin-top:10px; }
+  .bar-fill { height:100%; background:#4ade80; transition:width 1s linear; }
+</style>
+</head>
+<body>
+
+<h2>🔐 Générateur de code TOTP</h2>
+<p>Colle ta clé secrète (celle affichée sous le QR code) :</p>
+<input id="secret" type="text" placeholder="Ex: 7X2YVWL5FKMMBX47TPDELUXWQGVHVKUP" autocapitalize="characters">
+
+<div class="code" id="code">------</div>
+<div class="timer">Nouveau code dans <span id="seconds">--</span>s</div>
+<div class="bar"><div class="bar-fill" id="bar" style="width:100%"></div></div>
+
+<script>
+// Implémentation TOTP (RFC 6238) en JavaScript pur, tout se calcule localement dans ce navigateur.
+function base32Decode(base32) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  base32 = base32.replace(/=+$/, "").toUpperCase().replace(/\s/g, "");
+  let bits = "";
+  for (let char of base32) {
+    const val = alphabet.indexOf(char);
+    if (val === -1) continue;
+    bits += val.toString(2).padStart(5, "0");
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) {
+    bytes.push(parseInt(bits.substr(i, 8), 2));
+  }
+  return new Uint8Array(bytes);
+}
+
+async function hmacSha1(key, message) {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, message);
+  return new Uint8Array(sig);
+}
+
+function intToBytes(num) {
+  const bytes = new Uint8Array(8);
+  for (let i = 7; i >= 0; i--) {
+    bytes[i] = num & 0xff;
+    num = Math.floor(num / 256);
+  }
+  return bytes;
+}
+
+async function generateTOTP(secretBase32) {
+  const key = base32Decode(secretBase32);
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const counterBytes = intToBytes(counter);
+  const hmac = await hmacSha1(key, counterBytes);
+  const offset = hmac[hmac.length - 1] & 0xf;
+  const binCode = ((hmac[offset] & 0x7f) << 24) |
+                   ((hmac[offset + 1] & 0xff) << 16) |
+                   ((hmac[offset + 2] & 0xff) << 8) |
+                   (hmac[offset + 3] & 0xff);
+  const otp = (binCode % 1000000).toString().padStart(6, "0");
+  return otp;
+}
+
+async function update() {
+  const secret = document.getElementById("secret").value.trim();
+  const codeEl = document.getElementById("code");
+  const secondsEl = document.getElementById("seconds");
+  const barEl = document.getElementById("bar");
+
+  const now = Math.floor(Date.now() / 1000);
+  const remaining = 30 - (now % 30);
+  secondsEl.textContent = remaining;
+  barEl.style.width = (remaining / 30 * 100) + "%";
+
+  if (secret.length > 0) {
+    try {
+      const code = await generateTOTP(secret);
+      codeEl.textContent = code.slice(0,3) + " " + code.slice(3);
+    } catch (e) {
+      codeEl.textContent = "ERREUR";
+    }
+  } else {
+    codeEl.textContent = "------";
+  }
+}
+
+setInterval(update, 1000);
+update();
+</script>
+
+</body>
+</html>
