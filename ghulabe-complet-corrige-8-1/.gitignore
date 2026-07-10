@@ -1,0 +1,18 @@
+# Secrets
+.env
+.env.local
+.env.production
+server/.env
+
+# Dépendances
+node_modules/
+server/node_modules/
+
+# Build
+dist/
+server/dist/
+build/
+
+# Système
+.DS_Store
+*.log
