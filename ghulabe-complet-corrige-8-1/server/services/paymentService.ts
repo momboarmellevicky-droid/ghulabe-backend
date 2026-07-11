@@ -129,7 +129,7 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
       }),
     });
 
-    const data = await res.json().catch(() => null);
+     const data = await res.j... = await res.json().catch(() => null);
 
     if (!res.ok || !data) {
       generateAuditLog({
