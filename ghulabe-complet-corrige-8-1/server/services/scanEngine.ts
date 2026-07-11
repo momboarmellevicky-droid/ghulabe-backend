@@ -130,8 +130,7 @@ export async function scanSSLCertificate(hostname: string): Promise<SSLStatus> {
           resolve({
             valid: authorized && expiresInDays > 0,
             expires_in_days: expiresInDays,
-            issuer: cert.issuer?.O || cert.issuer?.CN || 'Émetteur inconnu',
-          });
+            issuer: String(cert.issuer?.O ?? cert.issuer?.CN ?? 'Émetteur inconnu'),
         } catch (err: any) {
           resolve({ valid: false, expires_in_days: 0, issuer: 'Inconnu', error: err.message });
         } finally {
