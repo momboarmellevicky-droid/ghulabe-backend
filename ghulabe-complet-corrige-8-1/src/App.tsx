@@ -194,15 +194,29 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'scan' && (
-          <ScanView
-            lang={lang}
-            initialUrl={scanTargetUrl}
-            initialScanActive={isScanAutoStarted}
-            setActiveTab={setActiveTab}
-            onScanComplete={() => {
-              setIsScanAutoStarted(false);
-            }}
-          />
+          sessionUser ? (
+            <ScanView
+              lang={lang}
+              initialUrl={scanTargetUrl}
+              initialScanActive={isScanAutoStarted}
+              setActiveTab={setActiveTab}
+              onScanComplete={() => {
+                setIsScanAutoStarted(false);
+              }}
+            />
+          ) : (
+            <div className="max-w-md mx-auto py-12 px-4 space-y-6">
+              <p className="text-center text-gray-300 text-sm">
+                {lang === 'fr'
+                  ? "Connectez-vous pour lancer un scan de sécurité."
+                  : "Log in to run a security scan."}
+              </p>
+              <AuthView
+                lang={lang}
+                onLoginSuccess={handleLoginSuccess}
+              />
+            </div>
+          )
         )}
 
         {activeTab === 'dash' && (
