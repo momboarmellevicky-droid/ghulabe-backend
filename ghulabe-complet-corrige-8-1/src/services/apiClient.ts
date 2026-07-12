@@ -12,60 +12,6 @@ export const GhulabeBackend = {
    * 1. Connexion Étape 1 : Valide le mot de passe et déclenche l'envoi du challenge 2FA
    */
   async loginStep1(email: string, passwordHash: string): Promise<{ challengeId: string; devNote?: string }> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: passwordHash }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return await res.json();
-    } catch (err: any) {
-      console.warn('[GHULABE Backend Wrapper] Erreur loginStep1 (simulation locale):', err.message);
-      // Fallback démo fluide si le serveur Express n'est pas lancé séparément
-      return { challengeId: `2fa-demo-${Date.now()}`, devNote: 'Code 2FA: "2026"' };
-    }
-  },
-
-  /**
-   * 2. Connexion Étape 2 : Vérifie le code OTP 2FA et récupère le JWT (valable 24h)
-   */
-  async verify2FA(challengeId: string, otp: string): Promise<{ accessToken: string; user: any }> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/verify-2fa`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ challengeId, otp }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return await res.json();
-    } catch (err: any) {
-      console.warn('[GHULABE Backend Wrapper] Erreur verify2FA (simulation locale):', err.message);
-      if (otp === '2026' || otp.length >= 4) {
-        return {
-          accessToken: 'jwt_mock_token_24h_expiry_verified_2fa',
-          user: { id: 'usr-pme-master', email: 'direction@africacyber-pme.ga', role: 'admin', plan: 'gardien', is2faVerified: true },
-        };
-      }
-      throw new Error('Code 2FA invalide.');
-    }
-  },
-
-  /**
-   * 3. Lancimport { ScanResult, Mission } from '../types';
-import { MOCK_MISSIONS } from '../data/mockData';
-
-// @ts-ignore
-const API_BASE_URL = (import.meta && import.meta.env && import.meta.env.VITE_API_URL) || '/api';
-
-/**
- * Interface frontend pour communiquer avec le Backend GHULABE (Render / Supabase EU)
- */
-export const GhulabeBackend = {
-  /**
-   * 1. Connexion Étape 1 : Valide le mot de passe et déclenche l'envoi du challenge 2FA
-   */
-  async loginStep1(email: string, passwordHash: string): Promise<{ challengeId: string; devNote?: string }> {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -193,4 +139,4 @@ export const GhulabeBackend = {
       return null;
     }
   },
-};e un scan externe asynchrone (mo
+};
