@@ -216,7 +216,7 @@ export async function checkPaymentStatus(transactionId: string, userId: string, 
       },
     });
 
-    const data = await res.json().catch(() => null);
+    const data: any = await res.json().catch(() => null);
     const status: PaymentResult['status'] =
       data?.status === 'success' ? 'success' : data?.status === 'failed' ? 'failed' : 'pending';
 
