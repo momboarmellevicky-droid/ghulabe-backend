@@ -121,6 +121,9 @@ export const App: React.FC = () => {
       created_at: '2026-01-01T00:00:00.000Z',
       is2FAEnabled: user.is2faVerified,
     });
+    // Redirection automatique vers le Scanner après connexion réussie :
+    // l'utilisateur ne doit jamais avoir à chercher un onglet après s'être identifié.
+    setActiveTab('scan');
   };
 
   const handleLogout = async () => {
