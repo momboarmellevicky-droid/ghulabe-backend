@@ -52,6 +52,52 @@ export const GhulabeBackend = {
   },
 
   /**
+   * 3. Lancimport { ScanResult, Mission } from '../types';
+import { MOCK_MISSIONS } from '../data/mockData';
+
+// @ts-ignore
+const API_BASE_URL = (import.meta && import.meta.env && import.meta.env.VITE_API_URL) || '/api';
+
+/**
+ * Interface frontend pour communiquer avec le Backend GHULABE (Render / Supabase EU)
+ */
+export const GhulabeBackend = {
+  /**
+   * 1. Connexion Étape 1 : Valide le mot de passe et déclenche l'envoi du challenge 2FA
+   */
+  async loginStep1(email: string, passwordHash: string): Promise<{ challengeId: string; devNote?: string }> {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: passwordHash }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error_fr || errData.error || 'Identifiants invalides ou serveur indisponible.');
+    }
+    return await res.json();
+  },
+
+  /**
+   * 2. Connexion Étape 2 : Vérifie le code OTP 2FA et récupère le JWT (valable 24h)
+   * SÉCURITÉ : aucun repli local ici. Un échec réseau ou serveur doit faire échouer la
+   * connexion, jamais la faire réussir silencieusement (ancien code acceptait tout OTP
+   * de 4+ caractères en cas d'erreur — faille corrigée le 12/07/2026).
+   */
+  async verify2FA(challengeId: string, otp: string): Promise<{ accessToken: string; user: any }> {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-2fa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeId, otp }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error_fr || errData.error || 'Code 2FA invalide ou serveur indisponible.');
+    }
+    return await res.json();
+  },
+
+  /**
    * 3. Lance un scan externe asynchrone (moteur Nuclei + Nmap + SSL Labs API) < 60s
    */
   async startScan(url: string, legalCheckboxAccepted: boolean, token?: string): Promise<ScanResult> {
@@ -71,16 +117,12 @@ export const GhulabeBackend = {
       return await res.json();
     } catch (err: any) {
       console.warn('[GHULABE Backend Wrapper] startScan fallback local:', err.message);
-      // Transform error to be displayed in UI if needed
       throw err;
     }
   },
 
   /**
    * 4. Récupère les missions visibles par l'utilisateur (filtrage par rôle géré côté backend).
-   * Sans token (session non encore branchée côté front), on retombe sur les données de
-   * démonstration MOCK_MISSIONS plutôt que de casser l'affichage — même logique défensive
-   * que loginStep1/verify2FA ci-dessus.
    */
   async getMissions(token?: string): Promise<Mission[]> {
     if (!token) {
@@ -103,8 +145,6 @@ export const GhulabeBackend = {
 
   /**
    * 0. Inscription : crée le compte côté backend (table users, mot de passe chiffré AES-256).
-   * Ne renvoie pas de session : le backend impose la connexion via loginStep1 + verify2FA
-   * juste après (2FA obligatoire), conformément à authController.ts.
    */
   async register(email: string, password: string, name: string, country: string): Promise<{ userId: string }> {
     const res = await fetch(`${API_BASE_URL}/auth/register`, {
@@ -120,8 +160,7 @@ export const GhulabeBackend = {
   },
 
   /**
-   * 5. Déconnexion côté backend (best-effort, pour la trace d'audit) : la déconnexion réelle
-   * côté client se fait toujours en supprimant le token local, même si cet appel échoue.
+   * 5. Déconnexion côté backend (best-effort, pour la trace d'audit).
    */
   async logout(token: string): Promise<void> {
     try {
@@ -135,10 +174,7 @@ export const GhulabeBackend = {
   },
 
   /**
-   * 6. Récupère domaines + alertes + nombre de scans en un seul appel (remplace les 3 appels
-   * Supabase directs auparavant faits depuis DashboardView.tsx, cassés — voir dashboardController.ts).
-   * Sans token, on renvoie null : DashboardView garde alors ses valeurs mock/props existantes
-   * plutôt que d'afficher un tableau vide.
+   * 6. Récupère domaines + alertes + nombre de scans en un seul appel.
    */
   async getDashboardData(token?: string): Promise<{ domains: any[]; alerts: any[]; scansCount: number } | null> {
     if (!token) {
@@ -157,4 +193,4 @@ export const GhulabeBackend = {
       return null;
     }
   },
-};
+};e un scan externe asynchrone (mo
