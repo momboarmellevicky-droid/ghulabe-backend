@@ -121,23 +121,14 @@ export const App: React.FC = () => {
       created_at: '2026-01-01T00:00:00.000Z',
       is2FAEnabled: user.is2faVerified,
     });
-    // Redirection automatique vers le Scanner après connexion réussie :
-    // l'utilisateur ne doit jamais avoir à chercher un onglet après s'être identifié.
-    setActiveTab('scan');
   };
 
-  // Déconnexion immédiate côté client, sans attendre le serveur (qui peut être lent
-  // à se réveiller sur le plan gratuit Render). L'appel backend se fait en
-  // arrière-plan, sans jamais bloquer l'interface ni le clic de l'utilisateur.
-  const handleLogout = () => {
-    const tokenToRevoke = accessToken;
+  const handleLogout = async () => {
+    if (accessToken) await GhulabeBackend.logout(accessToken);
     try { localStorage.removeItem('ghulabe_access_token'); } catch {}
     setAccessToken(null);
     setSessionUser(null);
-    setActiveTab('home');
-    if (tokenToRevoke) {
-      GhulabeBackend.logout(tokenToRevoke).catch(() => {});
-    }
+    alert(lang === 'fr' ? "Déconnexion réussie." : "Successfully logged out.");
   };
 
   const handleStartQuickScan = (url: string, _consentAccepted: boolean) => {
@@ -203,29 +194,15 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'scan' && (
-          sessionUser ? (
-            <ScanView
-              lang={lang}
-              initialUrl={scanTargetUrl}
-              initialScanActive={isScanAutoStarted}
-              setActiveTab={setActiveTab}
-              onScanComplete={() => {
-                setIsScanAutoStarted(false);
-              }}
-            />
-          ) : (
-            <div className="max-w-md mx-auto py-12 px-4 space-y-6">
-              <p className="text-center text-gray-300 text-sm">
-                {lang === 'fr'
-                  ? "Connectez-vous pour lancer un scan de sécurité."
-                  : "Log in to run a security scan."}
-              </p>
-              <AuthView
-                lang={lang}
-                onLoginSuccess={handleLoginSuccess}
-              />
-            </div>
-          )
+          <ScanView
+            lang={lang}
+            initialUrl={scanTargetUrl}
+            initialScanActive={isScanAutoStarted}
+            setActiveTab={setActiveTab}
+            onScanComplete={() => {
+              setIsScanAutoStarted(false);
+            }}
+          />
         )}
 
         {activeTab === 'dash' && (
