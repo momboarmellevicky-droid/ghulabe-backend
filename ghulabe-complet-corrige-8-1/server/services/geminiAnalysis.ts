@@ -191,7 +191,7 @@ export async function generateFindingsFromScan(
       throw new Error(`Gemini API a répondu ${res.status} : ${errBody.slice(0, 300)}`);
     }
 
-    const data: any = await res.json();= await res.json();
+    const data: any = await res.json();
     const rawText: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawText) {
