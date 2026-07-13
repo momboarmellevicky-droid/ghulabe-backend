@@ -486,3 +486,84 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
     res.status(500).json({ error_fr: "Erreur critique lors de la lecture de l'historique.", details: err.message });
   }
 }
+export async function previewScan(req: Request, res: Response): Promise<void> {
+  const { url, legalCheckboxAccepted } = req.body;
+  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+  if (!legalCheckboxAccepted) {
+    res.status(403).json({
+      error_fr: "⚠️ Accord obligatoire requis : Vous devez certifier être le propriétaire ou l'administrateur autorisé de ce domaine.",
+      error_en: "⚠️ Mandatory agreement required: You must certify ownership of this domain before scanning.",
+      code: 'MISSING_LEGAL_CONSENT',
+    });
+    return;
+  }
+
+  if (!url || typeof url !== 'string' || !url.includes('.')) {
+    res.status(400).json({
+      error_fr: "L'URL fournie est invalide. Veuillez renseigner un nom de domaine valide.",
+      error_en: "Invalid URL provided.",
+    });
+    return;
+  }
+
+  const cleanUrl = url.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+
+  generateAuditLog({
+    action: 'PREVIEW_SCAN_STARTED',
+    userId: 'ANONYMOUS',
+    ipAddress: ip,
+    targetUrl: cleanUrl,
+    status: 'SUCCESS',
+    details: 'Démarrage du scan aperçu (gratuit, résumé uniquement).',
+  });
+
+  try {
+    const facts = await runFullScan(cleanUrl, 'ANONYMOUS', ip);
+    const findings = await generateFindingsFromScan(facts, 'ANONYMOUS', ip);
+
+    const score = computeSecurityScore(
+      facts.headers_checked,
+      facts.ssl_status,
+      facts.exposed_files.length,
+      findings
+    );
+
+    const criticalCount = findings.filter((f) => f.severity === 'critique').length;
+    const highCount = findings.filter((f) => f.severity === 'eleve').length;
+
+    generateAuditLog({
+      action: 'PREVIEW_SCAN_COMPLETED',
+      userId: 'ANONYMOUS',
+      ipAddress: ip,
+      targetUrl: cleanUrl,
+      status: 'SUCCESS',
+      details: `Aperçu terminé. Score: ${score}/10. ${findings.length} faille(s) détectée(s) (non détaillées).`,
+    });
+
+    res.status(200).json({
+      message_fr: "Aperçu du scan terminé. Débloquez le rapport complet pour voir le détail et les corrections.",
+      message_en: "Scan preview complete. Unlock the full report to see details and fixes.",
+      url: cleanUrl,
+      score,
+      summary: {
+        total_findings: findings.length,
+        critical: criticalCount,
+        high: highCount,
+      },
+      locked: true,
+      upsell_fr: `${findings.length} faille(s) détectée(s) dont ${criticalCount} critique(s). Débloquez le rapport complet pour le détail technique et les correctifs.`,
+      upsell_en: `${findings.length} issue(s) found including ${criticalCount} critical. Unlock the full report for technical details and fixes.`,
+    });
+  } catch (err: any) {
+    generateAuditLog({
+      action: 'PREVIEW_SCAN_FAILED',
+      userId: 'ANONYMOUS',
+      ipAddress: ip,
+      targetUrl: cleanUrl,
+      status: 'FAILED',
+      details: `Erreur lors de l'aperçu: ${err.message}`,
+    });
+    res.status(500).json({ error_fr: "Erreur lors de l'aperçu du scan.", details: err.message });
+  }
+}
