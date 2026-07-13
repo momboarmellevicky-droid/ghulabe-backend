@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '../config/supabase';
-import { generateAuditLog } from '../utils/crypto';
+import { decryptAES256, generateAuditLog } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
 import { sendOtpEmail } from '../services/emailService';
 
@@ -84,6 +84,12 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 }
 
+// Un hash bcrypt commence toujours par $2a$, $2b$ ou $2y$. Tout le reste est
+// considéré comme un ancien mot de passe chiffré (AES) à migrer.
+function isBcryptHash(value: string): boolean {
+  return /^\$2[aby]\$/.test(value);
+}
+
 export async function login(req: Request, res: Response): Promise<void> {
   const { email, password, lang } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -138,7 +144,34 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.password_hash);
+    let passwordMatches = false;
+
+    if (isBcryptHash(user.password_hash)) {
+      // Compte déjà au nouveau format : vérification bcrypt standard.
+      passwordMatches = await bcrypt.compare(password, user.password_hash);
+    } else {
+      // Compte créé avant la migration (ancien chiffrement AES réversible).
+      // On vérifie avec l'ancienne méthode, et si le mot de passe est bon,
+      // on migre silencieusement vers bcrypt pour la prochaine fois — le
+      // client ne voit rien, ne fait rien, ça marche simplement.
+      try {
+        passwordMatches = decryptAES256(user.password_hash) === password;
+      } catch {
+        passwordMatches = false;
+      }
+
+      if (passwordMatches) {
+        const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+        await supabaseAdmin.from('users').update({ password_hash: newHash }).eq('id', user.id);
+        generateAuditLog({
+          action: 'PASSWORD_MIGRATED_TO_BCRYPT',
+          userId: user.id,
+          ipAddress: ip,
+          status: 'SUCCESS',
+          details: `Mot de passe migré automatiquement vers bcrypt lors de la connexion (${email}).`,
+        });
+      }
+    }
 
     if (!passwordMatches) {
       genericAuthError();
@@ -282,4 +315,4 @@ export async function logout(req: Request, res: Response): Promise<void> {
     message_fr: "Déconnexion réussie.",
     message_en: "Logged out successfully.",
   });
-      }
+}
