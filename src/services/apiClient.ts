@@ -64,7 +64,21 @@ export const GhulabeBackend = {
       body: JSON.stringify({ url, legalCheckboxAccepted }),
     }, token);
   },
-
+/**
+   * Lance un scan aperçu gratuit (score + nombre de failles uniquement, sans détail).
+   * Limité par IP (10/heure). Anonyme, pas de token requis.
+   */
+  async previewScan(url: string, legalCheckboxAccepted: boolean): Promise<{
+    score: number;
+    summary: { total_findings: number; critical: number; high: number };
+    upsell_fr: string;
+    upsell_en: string;
+  }> {
+    return apiFetch('/api/scan/preview', {
+      method: 'POST',
+      body: JSON.stringify({ url, legalCheckboxAccepted }),
+    });
+  },
   async getMissions(token?: string): Promise<Mission[]> {
     return apiFetch('/api/missions', { method: 'GET' }, token);
   },
