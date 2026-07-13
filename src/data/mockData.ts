@@ -640,11 +640,4 @@ export const QCM_QUESTIONS: QCMQuestion[] = [
   }
 ];
 
-export const MOCK_DEVELOPERS: Developer[] = [
-  {
-    id: 'dev-libreville-1',
-    name: 'Koumba Jean-Baptiste',
-    email: 'jb.koumba@appsec-gabon.ga',
-    country: 'Gabon',
-    city: 'Libreville',
-   
+export const MOCK_DEVELOPERS: Developer[] = [];
