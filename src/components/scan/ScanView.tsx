@@ -403,4 +403,171 @@ export const ScanView: React.FC<ScanViewProps> = ({
               <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#0066FF]/30 flex items-center justify-between">
                 <div>
                   <h3 className="font-display font-extrabold text-lg sm:text-xl text-white">
-                    {t.ce
+                    
+{t.ceoSectionTitle}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-400 mt-1 font-sans">
+                    {lang === 'fr' 
+                      ? "Langage clair sans acronymes techniques pour comprendre l'impact financier, légal et la réputation de votre PME."
+                      : "Clear non-technical language explaining the financial risk, legal exposure, and reputation impact on your business."
+                    }
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {currentResult.findings.map((finding) => (
+                  <div 
+                    key={finding.id}
+                    className={`glass-card rounded-2xl p-6 sm:p-8 border space-y-6 ${
+                      finding.severity === 'critique' ? 'border-[#FF2D2D]/60 bg-[#FF2D2D]/5' :
+                      finding.severity === 'eleve' ? 'border-[#FF6B2D]/60 bg-[#FF6B2D]/5' :
+                      finding.severity === 'moyen' ? 'border-[#FFB800]/60 bg-[#FFB800]/5' : 'border-[#0066FF]/50 bg-[#0066FF]/5'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">
+                          {finding.severity === 'critique' ? '🔴' : finding.severity === 'eleve' ? '🟠' : finding.severity === 'moyen' ? '🟡' : '🔵'}
+                        </span>
+                        <h4 className="font-display font-bold text-lg sm:text-xl text-white">
+                          {lang === 'fr' ? finding.title_fr : finding.title_en}
+                        </h4>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-[#0A0A0F] text-xs font-mono uppercase tracking-wider text-gray-300 border border-white/10 shrink-0">
+                        {finding.category}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
+                        <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
+                          {lang === 'fr' ? "💼 Impact Business" : "💼 Business Impact"}
+                        </span>
+                        <p className="text-xs sm:text-sm text-gray-200 leading-relaxed font-sans">
+                          {lang === 'fr' ? finding.ceo_impact_fr : finding.ceo_impact_en}
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
+                        <span className="text-[10px] font-mono text-[#FFB800] uppercase tracking-wider block">
+                          {lang === 'fr' ? "⚖️ Risque Financier & Légal" : "⚖️ Financial & Legal Risk"}
+                        </span>
+                        <p className="text-xs sm:text-sm text-gray-200 leading-relaxed font-sans font-medium">
+                          {lang === 'fr' ? finding.financial_risk_fr : finding.financial_risk_en}
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
+                        <span className="text-[10px] font-mono text-[#FF2D2D] uppercase tracking-wider block">
+                          {lang === 'fr' ? "🚨 Urgence & Plan d'action" : "🚨 Urgency & Action Plan"}
+                        </span>
+                        <p className="text-xs sm:text-sm text-[#FF2D2D] font-bold leading-relaxed font-sans">
+                          {lang === 'fr' ? finding.urgency_fr : finding.urgency_en}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: POUR LE DÉVELOPPEUR / FOR THE DEVELOPER */}
+          {activeReportTab === 'dev' && (
+            <div className="space-y-6">
+              <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#00FF88]/30 flex items-center justify-between">
+                <div>
+                  <h3 className="font-display font-extrabold text-lg sm:text-xl text-[#00FF88]">
+                    {t.devSectionTitle}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-300 mt-1 font-sans">
+                    {lang === 'fr' 
+                      ? "Détails techniques complets, références CVE et code source exact à copier-coller pour boucher la faille immédiatement."
+                      : "Full technical details, CVE references, and exact ready-to-copy source code to fix the vulnerability immediately."
+                    }
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {currentResult.findings.map((finding) => (
+                  <div 
+                    key={finding.id}
+                    className="glass-card rounded-2xl p-6 sm:p-8 border border-[#0066FF]/40 space-y-6 bg-[#0A0A0F]"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl font-mono text-[#00FF88]">⚡</span>
+                        <h4 className="font-display font-bold text-lg sm:text-xl text-white">
+                          {lang === 'fr' ? finding.title_fr : finding.title_en}
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        {finding.cve_id && (
+                          <span className="px-2.5 py-1 rounded bg-[#0066FF]/30 text-[#80C4FF] border border-[#0066FF]/50 font-bold">
+                            {finding.cve_id}
+                          </span>
+                        )}
+                        <span className="px-2.5 py-1 rounded bg-gray-800 text-gray-300 uppercase">
+                          {finding.remediation_lang}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Tech details */}
+                    <div className="p-4 rounded-xl bg-[#0D1B2A]/80 border border-white/5 space-y-1">
+                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
+                        {lang === 'fr' ? "Détails de Détection Moteur (Nuclei / Nmap / SSL Labs)" : "Engine Probe Details"}
+                      </span>
+                      <p className="text-xs sm:text-sm text-gray-200 font-mono">
+                        {lang === 'fr' ? finding.tech_details_fr : finding.tech_details_en}
+                      </p>
+                    </div>
+
+                    {/* READY TO COPY REMEDIATION CODE */}
+                    <div className="rounded-xl overflow-hidden border border-[#00FF88]/40 bg-[#070D14]">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-[#0D1B2A] border-b border-white/10 text-xs font-mono">
+                        <span className="text-[#00FF88] flex items-center gap-2 font-bold">
+                          <span>🔧 Correctif Code Exact à Copier</span>
+                          <span className="text-gray-400 font-normal">({finding.remediation_lang})</span>
+                        </span>
+                        <button
+                          onClick={() => handleCopyCode(finding.remediation_code, finding.id)}
+                          className="flex items-center gap-1.5 px-3 py-1 rounded bg-[#00FF88]/20 hover:bg-[#00FF88] text-[#00FF88] hover:text-[#0A0A0F] font-bold transition-all cursor-pointer"
+                        >
+                          {copiedId === finding.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>{t.copied}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>{t.copyCode}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="p-4 overflow-x-auto text-left font-mono text-xs text-gray-200 leading-relaxed selection:bg-[#00FF88] selection:text-[#0A0A0F]">
+                        <pre><code>{finding.remediation_code}</code></pre>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* PDF watermark footer banner */}
+          <div className="p-6 rounded-2xl bg-[#0D1B2A] border border-[#0066FF]/30 text-center text-xs font-mono text-gray-400 space-y-1">
+            <p>🛡️ GHULABE Security Reports are generated in accordance with international auditing standards.</p>
+            <p className="text-[#00FF88]">Filigrane confidentiel PDF : © 2026 GHULABE — Signé par Mombo Armelle Vicky</p>
+          </div>
+
+        </div>
+      )}
+
+    </div>
+  );
+};
