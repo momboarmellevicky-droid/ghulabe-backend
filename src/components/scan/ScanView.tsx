@@ -3,9 +3,9 @@ import { Language, ScanResult, TabType } from '../../types';
 import { getT } from '../../data/i18n';
 import { MOCK_SAMPLE_SCAN } from '../../data/mockData';
 import { GhulabeBackend } from '../../services/apiClient';
-import { 
-  Terminal, AlertOctagon, CheckSquare, Square, CheckCircle2, 
-  Copy, Check, FileDown, Lock, Code2, Cpu, Globe, 
+import {
+  Terminal, AlertOctagon, CheckSquare, Square, CheckCircle2,
+  Copy, Check, FileDown, Lock, Code2, Cpu, Globe,
   UserCheck
 } from 'lucide-react';
 
@@ -15,6 +15,7 @@ interface ScanViewProps {
   initialScanActive?: boolean;
   onScanComplete?: (res: ScanResult) => void;
   setActiveTab: (tab: TabType) => void;
+  accessToken?: string;
 }
 
 export const ScanView: React.FC<ScanViewProps> = ({
@@ -22,7 +23,8 @@ export const ScanView: React.FC<ScanViewProps> = ({
   initialUrl = '',
   initialScanActive = false,
   onScanComplete,
-  setActiveTab
+  setActiveTab,
+  accessToken
 }) => {
   const t = getT(lang);
 
@@ -45,42 +47,45 @@ export const ScanView: React.FC<ScanViewProps> = ({
     if (initialUrl) setUrl(initialUrl);
     if (initialScanActive) {
       setConsentChecked(true);
-      startScanProcess(initialUrl || 'ebanking-pme-africa.sn');
+      startScanProcess(initialUrl || 'ebanking-pme-africa.sn', true);
     }
   }, [initialUrl, initialScanActive]);
 
-  const startScanProcess = (targetUrl: string) => {
+  const startScanProcess = async (targetUrl: string, legalAccepted: boolean) => {
     setIsScanning(true);
     setScanStep(1);
     setScanProgress(5);
     setCurrentResult(null);
+    setErrorMsg('');
 
     const stepInterval = setInterval(() => {
-      setScanStep((prev) => {
-        if (prev < 5) return prev + 1;
-        return prev;
-      });
+      setScanStep((prev) => (prev < 5 ? prev + 1 : prev));
     }, 900);
 
     const progressInterval = setInterval(() => {
-      setScanProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          clearInterval(stepInterval);
-          setIsScanning(false);
-          const mockRes: ScanResult = {
-            ...MOCK_SAMPLE_SCAN,
-            id: `scan-${Date.now()}`,
-            url: targetUrl || 'ebanking-pme-africa.sn',
-            created_at: new Date().toISOString()
-          };
-          setCurrentResult(mockRes);
-          if (onScanComplete) onScanComplete(mockRes);
-          return 100;
-        }
-        return prev + 6;
-      });
-    }, 300);
+      setScanProgress((prev) => (prev < 90 ? prev + 3 : prev));
+    }, 900);
+
+    try {
+      const result = await GhulabeBackend.startScan(targetUrl, legalAccepted, accessToken);
+      clearInterval(stepInterval);
+      clearInterval(progressInterval);
+      setScanStep(5);
+      setScanProgress(100);
+      setIsScanning(false);
+      setCurrentResult(result);
+      if (onScanComplete) onScanComplete(result);
+    } catch (err) {
+      clearInterval(stepInterval);
+      clearInterval(progressInterval);
+      setIsScanning(false);
+      setScanProgress(0);
+      setErrorMsg(
+        lang === 'fr'
+          ? "Erreur lors du scan externe. Vérifiez le domaine et réessayez."
+          : "Error during external scan. Check the domain and try again."
+      );
+    }
   };
 
   const handleStartScan = (e: React.FormEvent) => {
@@ -94,7 +99,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
       return;
     }
     setErrorMsg('');
-    startScanProcess(url);
+    startScanProcess(url, consentChecked);
   };
 
   const handlePreviewScan = async () => {
@@ -125,7 +130,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
     setIsDownloadingPdf(true);
     setTimeout(() => {
       setIsDownloadingPdf(false);
-      alert(lang === 'fr' 
+      alert(lang === 'fr'
         ? "📄 Rapport d'Audit PDF officiel généré avec succès !\n\nFiligrane confidentiel : CONFIDENTIAL — GHULABE PME AFRICA\nSignature légale certifiée : Mombo Armelle Vicky © 2026"
         : "📄 Official Signed PDF Audit Report downloaded!\n\nConfidential Watermark: CONFIDENTIAL — GHULABE PME AFRICA\nCertified Legal Signature: Mombo Armelle Vicky © 2026"
       );
@@ -134,7 +139,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-12">
-      
+
       {/* Scanner Control Header & Consent Box */}
       <div className="glass-card p-4 sm:p-6 rounded-3xl border border-[#0066FF]/40 shadow-[0_0_35px_rgba(0,102,255,0.15)]">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
@@ -180,7 +185,6 @@ export const ScanView: React.FC<ScanViewProps> = ({
             </button>
           </div>
 
-          {/* ACCORD OBLIGATOIRE CASE À COCHER (CRITICAL REQUIREMENT) */}
           <div className="p-4 rounded-xl bg-[#0D1B2A] border border-[#0066FF]/30 text-left">
             <label className="flex items-start gap-3 cursor-pointer select-none group">
               <div
@@ -251,7 +255,6 @@ export const ScanView: React.FC<ScanViewProps> = ({
         </form>
       </div>
 
-      {/* SCANNING SIMULATOR (< 60s animation) */}
       {isScanning && (
         <div className="glass-card p-8 sm:p-12 rounded-3xl border border-[#0066FF] shadow-[0_0_40px_rgba(0,102,255,0.4)] text-center max-w-4xl mx-auto animate-pulse-neon">
           <div className="relative w-20 h-20 mx-auto mb-6 flex items-center justify-center">
@@ -268,7 +271,6 @@ export const ScanView: React.FC<ScanViewProps> = ({
             Cible : <strong className="text-[#00FF88]">{url}</strong> — {t.scanningSub}
           </p>
 
-          {/* Progress Bar */}
           <div className="mt-8 max-w-xl mx-auto">
             <div className="w-full h-3 bg-[#0A0A0F] rounded-full overflow-hidden p-0.5 border border-[#0066FF]/40">
               <div
@@ -282,7 +284,6 @@ export const ScanView: React.FC<ScanViewProps> = ({
             </div>
           </div>
 
-          {/* Step checklist */}
           <div className="mt-8 text-left max-w-xl mx-auto space-y-3 bg-[#0A0A0F]/80 p-5 rounded-2xl border border-white/5 text-xs font-mono">
             {[t.scanStep1, t.scanStep2, t.scanStep3, t.scanStep4, t.scanStep5].map((stepTxt, i) => {
               const stepNum = i + 1;
@@ -307,15 +308,12 @@ export const ScanView: React.FC<ScanViewProps> = ({
         </div>
       )}
 
-      {/* COMPLETED REPORT VIEW (TWO MANDATORY TABS) */}
       {!isScanning && currentResult && (
         <div className="space-y-4 sm:space-y-6 animate-fade-in">
-          
-          {/* Score overview & Download PDF Header */}
+
           <div className="glass-card p-4 sm:p-6 rounded-3xl border border-[#0066FF]/50 flex flex-col lg:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-6">
-              
-              {/* Score Circle */}
+
               <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#0A0A0F] border-2 border-[#FF2D2D] flex flex-col items-center justify-center shadow-[0_0_30px_rgba(255,45,45,0.4)] shrink-0">
                 <span className="text-3xl sm:text-4xl font-display font-black text-[#FF2D2D]">
                   {currentResult.score}
@@ -342,7 +340,6 @@ export const ScanView: React.FC<ScanViewProps> = ({
 
             </div>
 
-            {/* DOWNLOAD SIGNED PDF CTA */}
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
               <button
                 onClick={handleDownloadPdf}
@@ -363,7 +360,6 @@ export const ScanView: React.FC<ScanViewProps> = ({
             </div>
           </div>
 
-          {/* TWO MANDATORY REPORT TABS SWITCHER */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0D1B2A] p-2 rounded-2xl border border-white/10">
             <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:min-w-[480px]">
               <button
@@ -374,7 +370,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
-                <span>👔</span>
+                <span>🧑‍💼</span>
                 <span>{t.tabCeo}</span>
               </button>
 
@@ -397,177 +393,13 @@ export const ScanView: React.FC<ScanViewProps> = ({
             </div>
           </div>
 
-          {/* TAB 1: POUR LE PATRON / FOR THE CEO */}
           {activeReportTab === 'ceo' && (
             <div className="space-y-6">
               <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#0066FF]/30 flex items-center justify-between">
                 <div>
                   <h3 className="font-display font-extrabold text-lg sm:text-xl text-white">
-                    
-{t.ceoSectionTitle}
+                    {t.ceoSectionTitle}
                   </h3>
                   <p className="text-xs sm:text-sm text-gray-400 mt-1 font-sans">
-                    {lang === 'fr' 
-                      ? "Langage clair sans acronymes techniques pour comprendre l'impact financier, légal et la réputation de votre PME."
-                      : "Clear non-technical language explaining the financial risk, legal exposure, and reputation impact on your business."
-                    }
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                {currentResult.findings.map((finding) => (
-                  <div 
-                    key={finding.id}
-                    className={`glass-card rounded-2xl p-6 sm:p-8 border space-y-6 ${
-                      finding.severity === 'critique' ? 'border-[#FF2D2D]/60 bg-[#FF2D2D]/5' :
-                      finding.severity === 'eleve' ? 'border-[#FF6B2D]/60 bg-[#FF6B2D]/5' :
-                      finding.severity === 'moyen' ? 'border-[#FFB800]/60 bg-[#FFB800]/5' : 'border-[#0066FF]/50 bg-[#0066FF]/5'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">
-                          {finding.severity === 'critique' ? '🔴' : finding.severity === 'eleve' ? '🟠' : finding.severity === 'moyen' ? '🟡' : '🔵'}
-                        </span>
-                        <h4 className="font-display font-bold text-lg sm:text-xl text-white">
-                          {lang === 'fr' ? finding.title_fr : finding.title_en}
-                        </h4>
-                      </div>
-                      <span className="px-3 py-1 rounded-full bg-[#0A0A0F] text-xs font-mono uppercase tracking-wider text-gray-300 border border-white/10 shrink-0">
-                        {finding.category}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
-                        <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
-                          {lang === 'fr' ? "💼 Impact Business" : "💼 Business Impact"}
-                        </span>
-                        <p className="text-xs sm:text-sm text-gray-200 leading-relaxed font-sans">
-                          {lang === 'fr' ? finding.ceo_impact_fr : finding.ceo_impact_en}
-                        </p>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
-                        <span className="text-[10px] font-mono text-[#FFB800] uppercase tracking-wider block">
-                          {lang === 'fr' ? "⚖️ Risque Financier & Légal" : "⚖️ Financial & Legal Risk"}
-                        </span>
-                        <p className="text-xs sm:text-sm text-gray-200 leading-relaxed font-sans font-medium">
-                          {lang === 'fr' ? finding.financial_risk_fr : finding.financial_risk_en}
-                        </p>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
-                        <span className="text-[10px] font-mono text-[#FF2D2D] uppercase tracking-wider block">
-                          {lang === 'fr' ? "🚨 Urgence & Plan d'action" : "🚨 Urgency & Action Plan"}
-                        </span>
-                        <p className="text-xs sm:text-sm text-[#FF2D2D] font-bold leading-relaxed font-sans">
-                          {lang === 'fr' ? finding.urgency_fr : finding.urgency_en}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: POUR LE DÉVELOPPEUR / FOR THE DEVELOPER */}
-          {activeReportTab === 'dev' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#00FF88]/30 flex items-center justify-between">
-                <div>
-                  <h3 className="font-display font-extrabold text-lg sm:text-xl text-[#00FF88]">
-                    {t.devSectionTitle}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-gray-300 mt-1 font-sans">
-                    {lang === 'fr' 
-                      ? "Détails techniques complets, références CVE et code source exact à copier-coller pour boucher la faille immédiatement."
-                      : "Full technical details, CVE references, and exact ready-to-copy source code to fix the vulnerability immediately."
-                    }
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                {currentResult.findings.map((finding) => (
-                  <div 
-                    key={finding.id}
-                    className="glass-card rounded-2xl p-6 sm:p-8 border border-[#0066FF]/40 space-y-6 bg-[#0A0A0F]"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl font-mono text-[#00FF88]">⚡</span>
-                        <h4 className="font-display font-bold text-lg sm:text-xl text-white">
-                          {lang === 'fr' ? finding.title_fr : finding.title_en}
-                        </h4>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono text-xs">
-                        {finding.cve_id && (
-                          <span className="px-2.5 py-1 rounded bg-[#0066FF]/30 text-[#80C4FF] border border-[#0066FF]/50 font-bold">
-                            {finding.cve_id}
-                          </span>
-                        )}
-                        <span className="px-2.5 py-1 rounded bg-gray-800 text-gray-300 uppercase">
-                          {finding.remediation_lang}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Tech details */}
-                    <div className="p-4 rounded-xl bg-[#0D1B2A]/80 border border-white/5 space-y-1">
-                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
-                        {lang === 'fr' ? "Détails de Détection Moteur (Nuclei / Nmap / SSL Labs)" : "Engine Probe Details"}
-                      </span>
-                      <p className="text-xs sm:text-sm text-gray-200 font-mono">
-                        {lang === 'fr' ? finding.tech_details_fr : finding.tech_details_en}
-                      </p>
-                    </div>
-
-                    {/* READY TO COPY REMEDIATION CODE */}
-                    <div className="rounded-xl overflow-hidden border border-[#00FF88]/40 bg-[#070D14]">
-                      <div className="flex items-center justify-between px-4 py-2.5 bg-[#0D1B2A] border-b border-white/10 text-xs font-mono">
-                        <span className="text-[#00FF88] flex items-center gap-2 font-bold">
-                          <span>🔧 Correctif Code Exact à Copier</span>
-                          <span className="text-gray-400 font-normal">({finding.remediation_lang})</span>
-                        </span>
-                        <button
-                          onClick={() => handleCopyCode(finding.remediation_code, finding.id)}
-                          className="flex items-center gap-1.5 px-3 py-1 rounded bg-[#00FF88]/20 hover:bg-[#00FF88] text-[#00FF88] hover:text-[#0A0A0F] font-bold transition-all cursor-pointer"
-                        >
-                          {copiedId === finding.id ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span>{t.copied}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>{t.copyCode}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      <div className="p-4 overflow-x-auto text-left font-mono text-xs text-gray-200 leading-relaxed selection:bg-[#00FF88] selection:text-[#0A0A0F]">
-                        <pre><code>{finding.remediation_code}</code></pre>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* PDF watermark footer banner */}
-          <div className="p-6 rounded-2xl bg-[#0D1B2A] border border-[#0066FF]/30 text-center text-xs font-mono text-gray-400 space-y-1">
-            <p>🛡️ GHULABE Security Reports are generated in accordance with international auditing standards.</p>
-            <p className="text-[#00FF88]">Filigrane confidentiel PDF : © 2026 GHULABE — Signé par Mombo Armelle Vicky</p>
-          </div>
-
-        </div>
-      )}
-
-    </div>
-  );
-};
+                    {lang === 'fr'
+                      ? "Langage clair sans acronymes techniques pour comprendre l'impact financie
