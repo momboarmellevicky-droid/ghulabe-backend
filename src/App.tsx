@@ -17,13 +17,10 @@ export const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('fr');
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [sessionUser, setSessionUser] = useState<User | null>(null);
-  // Token JWT backend (signAccessToken/verifyAccessToken, 24h) — distinct de toute session
-  // Supabase Auth. C'est ce token, et lui seul, que requireAuth() accepte côté serveur.
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     try { return localStorage.getItem('ghulabe_access_token'); } catch { return null; }
   });
 
-  // Active user mock state (Mombo Armelle Vicky / SME Client)
   const [currentUser, setCurrentUser] = useState<User>({
     id: 'usr-pme-master',
     email: 'direction@africacyber-pme.ga',
@@ -35,7 +32,6 @@ export const App: React.FC = () => {
     is2FAEnabled: true
   });
 
-  // Monitored domains state
   const [domains, setDomains] = useState<Domain[]>([
     {
       id: 'dom-1',
@@ -63,23 +59,17 @@ export const App: React.FC = () => {
     }
   ]);
 
-  // Scanner direct launch state
   const [scanTargetUrl, setScanTargetUrl] = useState('ebanking-pme-africa.sn');
   const [isScanAutoStarted, setIsScanAutoStarted] = useState(false);
-  const [devPortalMode, setDevPortalMode] = useState<'find' | 'become'>('find');
+  <'find' | 'become'>('find');
   const [legalPage, setLegalPage] = useState<'mentions' | 'privacy' | 'cgu' | 'disclaimer' | 'cookies' | null>(null);
 
-  // Set document title dynamically
   useEffect(() => {
     document.title = lang === 'fr' 
       ? "GHULABE — 1ère plateforme de cybersécurité bilingue pour PME africaines"
       : "GHULABE — 1st bilingual cybersecurity platform for African SMEs";
   }, [lang]);
 
-  // Réhydrate la session au chargement à partir du JWT backend stocké en local (s'il existe et
-  // n'est pas expiré). On décode uniquement le payload (pas de vérification de signature côté
-  // client — inutile ici : chaque appel API réel est de toute façon revérifié par requireAuth()
-  // côté serveur). Un token invalide/expiré est simplement effacé, sans bloquer l'app.
   useEffect(() => {
     if (!accessToken) return;
     try {
@@ -106,8 +96,6 @@ export const App: React.FC = () => {
     }
   }, [accessToken]);
 
-  // Appelée par AuthView après validation 2FA réussie : reçoit le vrai JWT backend + le user
-  // (forme réduite BackendAuthUser) et construit un objet User complet pour le reste de l'app.
   const handleLoginSuccess = (token: string, user: BackendAuthUser) => {
     try { localStorage.setItem('ghulabe_access_token', token); } catch {}
     setAccessToken(token);
@@ -164,10 +152,8 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#0A0A0F] text-gray-100 selection:bg-[#0066FF] selection:text-white">
       
-      {/* Security Headers Production Telemetry Banner */}
       <SecurityHeadersBanner />
 
-      {/* Main Header (Bilingual toggle, Navigation, CTA) */}
       <Header
         lang={lang}
         setLang={setLang}
@@ -179,7 +165,6 @@ export const App: React.FC = () => {
         currentUser={sessionUser || currentUser}
       />
 
-      {/* Main Content Body */}
       <main className="flex-1 w-full transition-all duration-300">
         {activeTab === 'home' && (
           <HomeView
@@ -199,6 +184,7 @@ export const App: React.FC = () => {
             initialUrl={scanTargetUrl}
             initialScanActive={isScanAutoStarted}
             setActiveTab={setActiveTab}
+            accessToken={accessToken || undefined}
             onScanComplete={() => {
               setIsScanAutoStarted(false);
             }}
@@ -253,20 +239,17 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Legal Modal Component */}
       <LegalModal
         lang={lang}
         page={legalPage}
         onClose={() => setLegalPage(null)}
       />
 
-      {/* Footer on all pages (Exclusif) */}
       <Footer
         lang={lang}
         onOpenLegal={(page) => setLegalPage(page)}
       />
 
-      {/* Bottom Navigation on mobile devices */}
       <BottomNav
         activeTab={activeTab}
         setActiveTab={(tab) => {
