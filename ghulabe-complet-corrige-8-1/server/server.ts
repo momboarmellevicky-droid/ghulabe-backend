@@ -9,7 +9,7 @@ import { generateAuditLog } from './utils/crypto';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const ALLOWED_ORIGIN = process.env.CORS_ALLOWED_ORIGIN || 'https://ghulabe.com';
+const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || 'https://ghulabe.com').split(',').map(o => o.trim());
 
 // ============================================================================
 // 1. MIDDLEWARES DE SÉCURITÉ & EN-TÊTES HTTP STRICTS
@@ -18,7 +18,11 @@ app.use(express.json({ limit: '1mb' })); // Prévention d'injections et dénis d
 
 app.use((req: Request, res: Response, next) => {
   // CORS restreint strictement à ghulabe.com (Render / Supabase EU)
-  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  resconst requestOrigin = req.headers.origin;
+    if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+      res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+    }
+    res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -86,7 +90,7 @@ export async function startServer(): Promise<void> {
   console.log('🌐 Hébergement Cible : Render (Europe) — Supabase EU (ghulabe.com)');
   console.log('====================================================');
 
-  await testDbConnection();
+  console.log(`[GHULABE Server] Rate Limiting Strict: Actif | CORS: ${ALLOWED_ORIGINS.join(', ')}`);
 
   app.listen(PORT, () => {
     console.log(`[GHULABE Server] Serveur API en écoute sur le port ${PORT}`);
