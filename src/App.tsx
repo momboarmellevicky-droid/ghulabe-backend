@@ -61,7 +61,7 @@ export const App: React.FC = () => {
 
   const [scanTargetUrl, setScanTargetUrl] = useState('ebanking-pme-africa.sn');
   const [isScanAutoStarted, setIsScanAutoStarted] = useState(false);
-  <'find' | 'become'>('find');
+  <const [devPortalMode, setDevPortalMode] = useState<'find' | 'become'>('find');
   const [legalPage, setLegalPage] = useState<'mentions' | 'privacy' | 'cgu' | 'disclaimer' | 'cookies' | null>(null);
 
   useEffect(() => {
