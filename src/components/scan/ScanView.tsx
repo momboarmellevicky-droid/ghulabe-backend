@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Language, ScanResult, TabType } from '../../types';
 import { getT } from '../../data/i18n';
 import { MOCK_SAMPLE_SCAN } from '../../data/mockData';
+import { GhulabeBackend } from '../../services/apiClient';
 import { 
   Terminal, AlertOctagon, CheckSquare, Square, CheckCircle2, 
   Copy, Check, FileDown, Lock, Code2, Cpu, Globe, 
@@ -37,6 +38,8 @@ export const ScanView: React.FC<ScanViewProps> = ({
   );
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [previewResult, setPreviewResult] = useState<{ score: number; summary: { total_findings: number; critical: number; high: number }; upsell_fr: string } | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
   useEffect(() => {
     if (initialUrl) setUrl(initialUrl);
@@ -92,6 +95,24 @@ export const ScanView: React.FC<ScanViewProps> = ({
     }
     setErrorMsg('');
     startScanProcess(url);
+  };
+
+  const handlePreviewScan = async () => {
+    if (!url || !url.includes('.')) {
+      setErrorMsg(lang === 'fr' ? "Veuillez entrer un domaine valide (ex: masociete.com)" : "Please enter a valid domain (e.g. mycompany.com)");
+      return;
+    }
+    setErrorMsg('');
+    setIsPreviewing(true);
+    setPreviewResult(null);
+    try {
+      const result = await GhulabeBackend.previewScan(url, consentChecked);
+      setPreviewResult(result);
+    } catch (err) {
+      setErrorMsg(lang === 'fr' ? "Erreur lors du scan gratuit. Réessayez." : "Error during free scan. Try again.");
+    } finally {
+      setIsPreviewing(false);
+    }
   };
 
   const handleCopyCode = (code: string, id: string) => {
@@ -191,6 +212,42 @@ export const ScanView: React.FC<ScanViewProps> = ({
               </div>
             )}
           </div>
+
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handlePreviewScan}
+              disabled={isPreviewing || isScanning}
+              className="px-5 py-3 rounded-xl bg-transparent border border-[#00FF88]/50 hover:bg-[#00FF88]/10 text-[#00FF88] font-display font-bold text-xs sm:text-sm uppercase transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <Terminal className="w-4 h-4" />
+              <span>{isPreviewing ? (lang === 'fr' ? "SCAN GRATUIT EN COURS..." : "FREE SCAN RUNNING...") : (lang === 'fr' ? "🔎 Scan gratuit (aperçu)" : "🔎 Free scan (preview)")}</span>
+            </button>
+          </div>
+
+          {previewResult && (
+            <div className="p-5 rounded-xl bg-[#0D1B2A] border border-[#00FF88]/40 space-y-3 text-center">
+              <div className="flex items-center justify-center gap-6 flex-wrap">
+                <div>
+                  <span className="block text-3xl font-display font-extrabold text-[#00FF88]">{previewResult.score}</span>
+                  <span className="text-[10px] font-mono text-gray-400 uppercase">{lang === 'fr' ? "Score" : "Score"}</span>
+                </div>
+                <div>
+                  <span className="block text-3xl font-display font-extrabold text-white">{previewResult.summary.total_findings}</span>
+                  <span className="text-[10px] font-mono text-gray-400 uppercase">{lang === 'fr' ? "Failles" : "Findings"}</span>
+                </div>
+                <div>
+                  <span className="block text-3xl font-display font-extrabold text-[#FF2D2D]">{previewResult.summary.critical}</span>
+                  <span className="text-[10px] font-mono text-gray-400 uppercase">{lang === 'fr' ? "Critiques" : "Critical"}</span>
+                </div>
+                <div>
+                  <span className="block text-3xl font-display font-extrabold text-[#FFB800]">{previewResult.summary.high}</span>
+                  <span className="text-[10px] font-mono text-gray-400 uppercase">{lang === 'fr' ? "Élevées" : "High"}</span>
+                </div>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-200 font-sans">{previewResult.upsell_fr}</p>
+            </div>
+          )}
         </form>
       </div>
 
@@ -346,54 +403,4 @@ export const ScanView: React.FC<ScanViewProps> = ({
               <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#0066FF]/30 flex items-center justify-between">
                 <div>
                   <h3 className="font-display font-extrabold text-lg sm:text-xl text-white">
-                    {t.ceoSectionTitle}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-gray-400 mt-1 font-sans">
-                    {lang === 'fr' 
-                      ? "Langage clair sans acronymes techniques pour comprendre l'impact financier, légal et la réputation de votre PME."
-                      : "Clear non-technical language explaining the financial risk, legal exposure, and reputation impact on your business."
-                    }
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                {currentResult.findings.map((finding) => (
-                  <div 
-                    key={finding.id}
-                    className={`glass-card rounded-2xl p-6 sm:p-8 border space-y-6 ${
-                      finding.severity === 'critique' ? 'border-[#FF2D2D]/60 bg-[#FF2D2D]/5' :
-                      finding.severity === 'eleve' ? 'border-[#FF6B2D]/60 bg-[#FF6B2D]/5' :
-                      finding.severity === 'moyen' ? 'border-[#FFB800]/60 bg-[#FFB800]/5' : 'border-[#0066FF]/50 bg-[#0066FF]/5'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">
-                          {finding.severity === 'critique' ? '🔴' : finding.severity === 'eleve' ? '🟠' : finding.severity === 'moyen' ? '🟡' : '🔵'}
-                        </span>
-                        <h4 className="font-display font-bold text-lg sm:text-xl text-white">
-                          {lang === 'fr' ? finding.title_fr : finding.title_en}
-                        </h4>
-                      </div>
-                      <span className="px-3 py-1 rounded-full bg-[#0A0A0F] text-xs font-mono uppercase tracking-wider text-gray-300 border border-white/10 shrink-0">
-                        {finding.category}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
-                        <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
-                          {lang === 'fr' ? "💼 Impact Business" : "💼 Business Impact"}
-                        </span>
-                        <p className="text-xs sm:text-sm text-gray-200 leading-relaxed font-sans">
-                          {lang === 'fr' ? finding.ceo_impact_fr : finding.ceo_impact_en}
-                        </p>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
-                        <span className="text-[10px] font-mono text-[#FFB800] uppercase tracking-wider block">
-                          {lang === 'fr' ? "⚖️ Risque Financier & Légal" : "⚖️ Financial & Legal Risk"}
-                        </span>
-                        <p className="text-xs sm:text-sm text-gray-200 leading-relaxed font-sans font-medium">
-                          {lang === 'fr' ? finding.financial_risk_fr : finding.financial
+                    {t.ce
