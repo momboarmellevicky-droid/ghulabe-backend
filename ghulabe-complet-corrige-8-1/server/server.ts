@@ -17,12 +17,12 @@ const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || 'https://ghulabe.co
 app.use(express.json({ limit: '1mb' })); // Prévention d'injections et dénis de service par payload
 
 app.use((req: Request, res: Response, next) => {
-  // CORS restreint strictement à ghulabe.com (Render / Supabase EU)
-  resconst requestOrigin = req.headers.origin;
-    if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
-      res.setHeader('Access-Control-Allow-Origin', requestOrigin);
-    }
-    res.setHeader('Vary', 'Origin');
+  // CORS restreint à une liste blanche d'origines autorisées (production + outils de test internes)
+  const requestOrigin = req.headers.origin;
+  if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+  }
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -84,17 +84,17 @@ app.use('*', (req: Request, res: Response) => {
 // 3. DÉMARRAGE DU SERVEUR
 // ============================================================================
 export async function startServer(): Promise<void> {
-  console.log('====================================================');
+  console.log('========================================================');
   console.log('⚡ DÉMARRAGE DU BACKEND GHULABE © 2026');
   console.log('🛡️ Architecte Principal : Mombo Armelle Vicky');
   console.log('🌐 Hébergement Cible : Render (Europe) — Supabase EU (ghulabe.com)');
-  console.log('====================================================');
+  console.log('========================================================');
 
-  console.log(`[GHULABE Server] Rate Limiting Strict: Actif | CORS: ${ALLOWED_ORIGINS.join(', ')}`);
+  await testDbConnection();
 
   app.listen(PORT, () => {
     console.log(`[GHULABE Server] Serveur API en écoute sur le port ${PORT}`);
-    console.log(`[GHULABE Server] Rate Limiting Strict: Actif | CORS: ${ALLOWED_ORIGIN}`);
+    console.log(`[GHULABE Server] Rate Limiting Strict: Actif | CORS: ${ALLOWED_ORIGINS.join(', ')}`);
   });
 }
 
