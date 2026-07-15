@@ -49,7 +49,8 @@ export async function generateScanReportPdf(
   doc.moveDown(0.5);
   doc.text(`Fichiers sensibles exposés : ${facts.exposed_files.length > 0 ? facts.exposed_files.join(', ') : 'Aucun'}`);
   doc.moveDown(1.5);
-doc.fontSize(14).fillColor('#000000').text('Failles détectées', { underline: true });
+
+  doc.fontSize(14).fillColor('#000000').text('Failles détectées', { underline: true });
   doc.moveDown(0.5);
 
   if (findings.length === 0) {
@@ -64,9 +65,6 @@ doc.fontSize(14).fillColor('#000000').text('Failles détectées', { underline: t
       doc.fontSize(9).fillColor('#333333').text(`Détail technique : ${f.tech_details_fr}`, { indent: 15 });
       doc.fontSize(9).fillColor('#0066FF').text(`Correctif : ${f.remediation_code}`, { indent: 15 });
       doc.moveDown(0.5);
-    });
-  }
-  
     });
   }
 
