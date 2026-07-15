@@ -49,8 +49,7 @@ export async function generateScanReportPdf(
   doc.moveDown(0.5);
   doc.text(`Fichiers sensibles exposés : ${facts.exposed_files.length > 0 ? facts.exposed_files.join(', ') : 'Aucun'}`);
   doc.moveDown(1.5);
-
-  doc.fontSize(14).fillColor('#000000').text('Failles détectées', { underline: true });
+doc.fontSize(14).fillColor('#000000').text('Failles détectées', { underline: true });
   doc.moveDown(0.5);
 
   if (findings.length === 0) {
@@ -58,12 +57,16 @@ export async function generateScanReportPdf(
   } else {
     findings.forEach((f, i) => {
       const color = f.severity === 'critique' ? '#FF2D2D' : f.severity === 'eleve' ? '#FF6B2D' : f.severity === 'moyen' ? '#FFB800' : '#666666';
-      doc.fontSize(11).fillColor(color).text(`${i + 1}. [${f.severity.toUpperCase()}] ${f.title}`);
-      doc.fontSize(9).fillColor('#333333').text(f.description || '', { indent: 15 });
-      if (f.recommendation) {
-        doc.fontSize(9).fillColor('#0066FF').text(`Correctif recommandé : ${f.recommendation}`, { indent: 15 });
-      }
+      doc.fontSize(11).fillColor(color).text(`${i + 1}. [${f.severity.toUpperCase()}] ${f.title_fr}`);
+      doc.fontSize(9).fillColor('#333333').text(`Impact : ${f.ceo_impact_fr}`, { indent: 15 });
+      doc.fontSize(9).fillColor('#333333').text(`Risque financier : ${f.financial_risk_fr}`, { indent: 15 });
+      doc.fontSize(9).fillColor('#333333').text(`Urgence : ${f.urgency_fr}`, { indent: 15 });
+      doc.fontSize(9).fillColor('#333333').text(`Détail technique : ${f.tech_details_fr}`, { indent: 15 });
+      doc.fontSize(9).fillColor('#0066FF').text(`Correctif : ${f.remediation_code}`, { indent: 15 });
       doc.moveDown(0.5);
+    });
+  }
+  
     });
   }
 
