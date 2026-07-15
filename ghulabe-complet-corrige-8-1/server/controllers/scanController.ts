@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { generateAuditLog } from '../utils/crypto';
 import { runFullScan } from '../services/scanEngine';
 import { generateFindingsFromScan, VulnerabilityFinding } from '../services/geminiAnalysis';
-
+import { generateScanReportPdf } from '../services/pdfReportService';
 /**
  * Calcule un score de sécurité sur 10 à partir des faits réels du scan
  * (headers manquants, SSL invalide/expirant, fichiers exposés, gravité des
@@ -126,7 +126,20 @@ export async function startScan(req: Request, res: Response): Promise<void> {
         }
 
         // 3b. Insère le scan lié à ce domaine
-        reportPdfUrl = `https://ghulabe.com/reports/${domainId}-${Date.now()}.pdf`;
+        try {
+  reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `${domainId}-${Date.now()}`);
+} catch (pdfErr: any) {
+  console.warn('[GHULABE Scan] Génération PDF échouée:', pdfErr.message);
+  generateAuditLog({
+    action: 'PDF_GENERATION_FAILED',
+    userId: userId || 'ANONYMOUS',
+    ipAddress: ip,
+    targetUrl: cleanUrl,
+    status: 'FAILED',
+    details: `Échec génération PDF: ${pdfErr.message}`,
+  });
+  reportPdfUrl = null;
+        }
         const { data: newScan, error: scanInsertError } = await supabaseAdmin
           .from('scans')
           .insert({ domain_id: domainId, score, findings, report_pdf_url: reportPdfUrl })
