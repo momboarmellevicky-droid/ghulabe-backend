@@ -273,12 +273,21 @@ export const ScanView: React.FC<ScanViewProps> = ({
 
               <div className="space-y-1 text-left">
                 <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-                  <span className="px-2 py-0.5 rounded bg-[#FF2D2D]/20 text-[#FF2D2D] border border-[#FF2D2D]/40 font-bold">
-                    🔴 2 Failles Critiques
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-[#FF6B2D]/20 text-[#FF6B2D] border border-[#FF6B2D]/40 font-bold">
-                    🟠 1 Élevée
-                  </span>
+                  {currentResult.findings.filter(f => f.severity === 'critique').length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-[#FF2D2D]/20 text-[#FF2D2D] border border-[#FF2D2D]/40 font-bold">
+                      🔴 {currentResult.findings.filter(f => f.severity === 'critique').length} Faille{currentResult.findings.filter(f => f.severity === 'critique').length > 1 ? 's' : ''} Critique{currentResult.findings.filter(f => f.severity === 'critique').length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {currentResult.findings.filter(f => f.severity === 'eleve').length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-[#FF6B2D]/20 text-[#FF6B2D] border border-[#FF6B2D]/40 font-bold">
+                      🟠 {currentResult.findings.filter(f => f.severity === 'eleve').length} Élevée{currentResult.findings.filter(f => f.severity === 'eleve').length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {currentResult.findings.filter(f => f.severity === 'critique').length === 0 && currentResult.findings.filter(f => f.severity === 'eleve').length === 0 && (
+                    <span className="px-2 py-0.5 rounded bg-[#00FF88]/20 text-[#00FF88] border border-[#00FF88]/40 font-bold">
+                      🟢 Aucune faille critique ou élevée
+                    </span>
+                  )}
                 </div>
                 <h2 className="text-xl sm:text-3xl font-display font-bold text-white">
                   Rapport externe : <span className="text-[#00FF88]">{currentResult.url}</span>
@@ -382,7 +391,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
                         </h4>
                       </div>
                       <span className="px-3 py-1 rounded-full bg-[#0A0A0F] text-xs font-mono uppercase tracking-wider text-gray-300 border border-white/10 shrink-0">
-                        {finding.category}
+        {finding.category}
                       </span>
                     </div>
 
