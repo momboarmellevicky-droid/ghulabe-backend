@@ -114,4 +114,4 @@ export const App: React.FC = () => {
     setSessionUser({
       id: user.id,
       email: user.email,
-      name: user.email.split('@')[0] || '
+      name: user.email.split('@')[0] || 'Utilisateur GHULABE',
