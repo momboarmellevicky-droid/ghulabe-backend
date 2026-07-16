@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language, ScanResult, TabType } from '../../types';
 import { getT } from '../../data/i18n';
-import { MOCK_SAMPLE_SCAN } from '../../data/mockData';
+import { GhulabeBackend } from '../../services/apiClient';
 import { 
   Terminal, AlertOctagon, CheckSquare, Square, CheckCircle2, 
   Copy, Check, FileDown, Lock, Code2, Cpu, Globe, 
@@ -12,6 +12,7 @@ interface ScanViewProps {
   lang: Language;
   initialUrl?: string;
   initialScanActive?: boolean;
+  accessToken?: string;
   onScanComplete?: (res: ScanResult) => void;
   setActiveTab: (tab: TabType) => void;
 }
@@ -20,64 +21,68 @@ export const ScanView: React.FC<ScanViewProps> = ({
   lang,
   initialUrl = '',
   initialScanActive = false,
+  accessToken,
   onScanComplete,
   setActiveTab
 }) => {
   const t = getT(lang);
 
-  const [url, setUrl] = useState(initialUrl || 'ebanking-pme-africa.sn');
+  const [url, setUrl] = useState(initialUrl);
   const [consentChecked, setConsentChecked] = useState(initialScanActive);
   const [errorMsg, setErrorMsg] = useState('');
   const [isScanning, setIsScanning] = useState(initialScanActive);
   const [scanStep, setScanStep] = useState(1);
   const [scanProgress, setScanProgress] = useState(0);
   const [activeReportTab, setActiveReportTab] = useState<'ceo' | 'dev'>('ceo');
-  const [currentResult, setCurrentResult] = useState<ScanResult | null>(
-    initialScanActive ? null : MOCK_SAMPLE_SCAN
-  );
+  const [currentResult, setCurrentResult] = useState<ScanResult | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   useEffect(() => {
     if (initialUrl) setUrl(initialUrl);
-    if (initialScanActive) {
+    if (initialScanActive && initialUrl) {
       setConsentChecked(true);
-      startScanProcess(initialUrl || 'ebanking-pme-africa.sn');
+      startScanProcess(initialUrl);
     }
   }, [initialUrl, initialScanActive]);
 
-  const startScanProcess = (targetUrl: string) => {
+  const startScanProcess = async (targetUrl: string) => {
     setIsScanning(true);
     setScanStep(1);
     setScanProgress(5);
     setCurrentResult(null);
+    setErrorMsg('');
 
     const stepInterval = setInterval(() => {
-      setScanStep((prev) => {
-        if (prev < 5) return prev + 1;
-        return prev;
-      });
+      setScanStep((prev) => (prev < 5 ? prev + 1 : prev));
     }, 900);
 
     const progressInterval = setInterval(() => {
-      setScanProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          clearInterval(stepInterval);
-          setIsScanning(false);
-          const mockRes: ScanResult = {
-            ...MOCK_SAMPLE_SCAN,
-            id: `scan-${Date.now()}`,
-            url: targetUrl || 'ebanking-pme-africa.sn',
-            created_at: new Date().toISOString()
-          };
-          setCurrentResult(mockRes);
-          if (onScanComplete) onScanComplete(mockRes);
-          return 100;
-        }
-        return prev + 6;
-      });
+      setScanProgress((prev) => (prev < 90 ? prev + 6 : prev));
     }, 300);
+
+    try {
+      // Appel réel au backend GHULABE (moteur Nuclei + Nmap + SSL Labs API).
+      // Plus aucune donnée simulée : le score, le temps de scan et les failles
+      // renvoyés varient réellement selon le domaine scanné.
+      const result = await GhulabeBackend.startScan(targetUrl, consentChecked, accessToken);
+      clearInterval(stepInterval);
+      clearInterval(progressInterval);
+      setScanStep(5);
+      setScanProgress(100);
+      setIsScanning(false);
+      setCurrentResult(result);
+      if (onScanComplete) onScanComplete(result);
+    } catch (err: any) {
+      clearInterval(stepInterval);
+      clearInterval(progressInterval);
+      setIsScanning(false);
+      setScanProgress(0);
+      setErrorMsg(
+        err.message ||
+        (lang === 'fr' ? 'Erreur lors du scan.' : 'Scan failed.')
+      );
+    }
   };
 
   const handleStartScan = (e: React.FormEvent) => {
@@ -393,123 +398,4 @@ export const ScanView: React.FC<ScanViewProps> = ({
 
                       <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
                         <span className="text-[10px] font-mono text-[#FFB800] uppercase tracking-wider block">
-                          {lang === 'fr' ? "⚖️ Risque Financier & Légal" : "⚖️ Financial & Legal Risk"}
-                        </span>
-                        <p className="text-xs sm:text-sm text-gray-200 leading-relaxed font-sans font-medium">
-                          {lang === 'fr' ? finding.financial_risk_fr : finding.financial_risk_en}
-                        </p>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-[#0A0A0F]/80 border border-white/5 space-y-1">
-                        <span className="text-[10px] font-mono text-[#FF2D2D] uppercase tracking-wider block">
-                          {lang === 'fr' ? "🚨 Urgence & Plan d'action" : "🚨 Urgency & Action Plan"}
-                        </span>
-                        <p className="text-xs sm:text-sm text-[#FF2D2D] font-bold leading-relaxed font-sans">
-                          {lang === 'fr' ? finding.urgency_fr : finding.urgency_en}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: POUR LE DÉVELOPPEUR / FOR THE DEVELOPER */}
-          {activeReportTab === 'dev' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#00FF88]/30 flex items-center justify-between">
-                <div>
-                  <h3 className="font-display font-extrabold text-lg sm:text-xl text-[#00FF88]">
-                    {t.devSectionTitle}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-gray-300 mt-1 font-sans">
-                    {lang === 'fr' 
-                      ? "Détails techniques complets, références CVE et code source exact à copier-coller pour boucher la faille immédiatement."
-                      : "Full technical details, CVE references, and exact ready-to-copy source code to fix the vulnerability immediately."
-                    }
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                {currentResult.findings.map((finding) => (
-                  <div 
-                    key={finding.id}
-                    className="glass-card rounded-2xl p-6 sm:p-8 border border-[#0066FF]/40 space-y-6 bg-[#0A0A0F]"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl font-mono text-[#00FF88]">⚡</span>
-                        <h4 className="font-display font-bold text-lg sm:text-xl text-white">
-                          {lang === 'fr' ? finding.title_fr : finding.title_en}
-                        </h4>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono text-xs">
-                        {finding.cve_id && (
-                          <span className="px-2.5 py-1 rounded bg-[#0066FF]/30 text-[#80C4FF] border border-[#0066FF]/50 font-bold">
-                            {finding.cve_id}
-                          </span>
-                        )}
-                        <span className="px-2.5 py-1 rounded bg-gray-800 text-gray-300 uppercase">
-                          {finding.remediation_lang}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Tech details */}
-                    <div className="p-4 rounded-xl bg-[#0D1B2A]/80 border border-white/5 space-y-1">
-                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
-                        {lang === 'fr' ? "Détails de Détection Moteur (Nuclei / Nmap / SSL Labs)" : "Engine Probe Details"}
-                      </span>
-                      <p className="text-xs sm:text-sm text-gray-200 font-mono">
-                        {lang === 'fr' ? finding.tech_details_fr : finding.tech_details_en}
-                      </p>
-                    </div>
-
-                    {/* READY TO COPY REMEDIATION CODE */}
-                    <div className="rounded-xl overflow-hidden border border-[#00FF88]/40 bg-[#070D14]">
-                      <div className="flex items-center justify-between px-4 py-2.5 bg-[#0D1B2A] border-b border-white/10 text-xs font-mono">
-                        <span className="text-[#00FF88] flex items-center gap-2 font-bold">
-                          <span>🔧 Correctif Code Exact à Copier</span>
-                          <span className="text-gray-400 font-normal">({finding.remediation_lang})</span>
-                        </span>
-                        <button
-                          onClick={() => handleCopyCode(finding.remediation_code, finding.id)}
-                          className="flex items-center gap-1.5 px-3 py-1 rounded bg-[#00FF88]/20 hover:bg-[#00FF88] text-[#00FF88] hover:text-[#0A0A0F] font-bold transition-all cursor-pointer"
-                        >
-                          {copiedId === finding.id ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span>{t.copied}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>{t.copyCode}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      <div className="p-4 overflow-x-auto text-left font-mono text-xs text-gray-200 leading-relaxed selection:bg-[#00FF88] selection:text-[#0A0A0F]">
-                        <pre><code>{finding.remediation_code}</code></pre>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* PDF watermark footer banner */}
-          <div className="p-6 rounded-2xl bg-[#0D1B2A] border border-[#0066FF]/30 text-center text-xs font-mono text-gray-400 space-y-1">
-            <p>🛡️ GHULABE Security Reports are generated in accordance with international auditing standards.</p>
-            <p className="text-[#00FF88]">Filigrane confidentiel PDF : © 2026 GHULABE — Signé par Mombo Armelle Vicky</p>
-          </div>
-
-        </div>
-      )}
-
-    </div>
-  );
-};
+                          {lang === 'fr' ? "⚖️ Risque Financi
