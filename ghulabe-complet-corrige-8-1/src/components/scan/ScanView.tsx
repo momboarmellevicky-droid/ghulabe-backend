@@ -106,14 +106,17 @@ export const ScanView: React.FC<ScanViewProps> = ({
   };
 
   const handleDownloadPdf = () => {
-    setIsDownloadingPdf(true);
-    setTimeout(() => {
-      setIsDownloadingPdf(false);
-      alert(lang === 'fr' 
-        ? "📄 Rapport d'Audit PDF officiel généré avec succès !\n\nFiligrane confidentiel : CONFIDENTIAL — GHULABE PME AFRICA\nSignature légale certifiée : Mombo Armelle Vicky © 2026"
-        : "📄 Official Signed PDF Audit Report downloaded!\n\nConfidential Watermark: CONFIDENTIAL — GHULABE PME AFRICA\nCertified Legal Signature: Mombo Armelle Vicky © 2026"
+    if (!currentResult?.report_pdf_url) {
+      setErrorMsg(
+        lang === 'fr'
+          ? "⚠️ Rapport PDF indisponible pour ce scan (connectez-vous pour générer un rapport téléchargeable)."
+          : "⚠️ PDF report unavailable for this scan (log in to generate a downloadable report)."
       );
-    }, 1500);
+      return;
+    }
+    setIsDownloadingPdf(true);
+    window.open(currentResult.report_pdf_url, '_blank');
+    setIsDownloadingPdf(false);
   };
 
   return (
@@ -391,8 +394,8 @@ export const ScanView: React.FC<ScanViewProps> = ({
                         </h4>
                       </div>
                       <span className="px-3 py-1 rounded-full bg-[#0A0A0F] text-xs font-mono uppercase tracking-wider text-gray-300 border border-white/10 shrink-0">
-        {finding.category}
-                      </span>
+                        {finding.category}
+    </span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
@@ -526,4 +529,4 @@ export const ScanView: React.FC<ScanViewProps> = ({
 
     </div>
   );
-};
+};         
