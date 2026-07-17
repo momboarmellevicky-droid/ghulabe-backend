@@ -204,6 +204,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
                 budget_fcfa: 50000,
                 status: 'requested',
                 legal_checkbox_accepted: true,
+                categorie: findings.find((f) => f.severity === 'critique')?.category || null,
               });
 
             if (missionInsertError) throw missionInsertError;
@@ -515,7 +516,7 @@ export async function previewScan(req: Request, res: Response): Promise<void> {
   if (!url || typeof url !== 'string' || !url.includes('.')) {
     res.status(400).json({
       error_fr: "L'URL fournie est invalide. Veuillez renseigner un nom de domaine valide.",
-      error_en: "Invalid URL provided.",
+    error_en: "Invalid URL provided.",
     });
     return;
   }
@@ -579,4 +580,4 @@ export async function previewScan(req: Request, res: Response): Promise<void> {
     });
     res.status(500).json({ error_fr: "Erreur lors de l'aperçu du scan.", details: err.message });
   }
-}
+}  
