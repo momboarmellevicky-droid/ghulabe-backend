@@ -239,6 +239,7 @@ export const App: React.FC = () => {
           <DevsPortalView
             lang={lang}
             initialMode={devPortalMode}
+            accessToken={accessToken || undefined}
           />
         )}
 
