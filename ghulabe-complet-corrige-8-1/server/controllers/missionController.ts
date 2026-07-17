@@ -33,7 +33,7 @@ export async function getMissions(req: Request, res: Response): Promise<void> {
     let query = supabaseAdmin
       .from('missions')
       .select(
-        'id, client_id, client_name, developer_id, developer_name, assigned_dev_id, description, url, urgency, budget_fcfa, status, legal_checkbox_accepted, rating_stars, rating_review, alert_id, created_at, updated_at'
+        'id, client_id, client_name, developer_id, developer_name, assigned_dev_id, description, url, urgency, budget_fcfa, status, legal_checkbox_accepted, rating_stars, rating_review, alert_id, created_at, updated_at, required_specialites'
       )
       .order('created_at', { ascending: false });
 
@@ -61,15 +61,39 @@ export async function getMissions(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    let missionsWithMatch = missions || [];
+
+    // Matching intelligent : pour un développeur, on marque chaque mission comme
+    // "recommandée" si une de ses spécialités correspond aux spécialités requises
+    // par la mission, puis on remonte les missions recommandées en tête de liste.
+    // On ne filtre jamais (marché ouvert conservé) : is_recommended est indicatif.
+    if (role === 'dev') {
+      const { data: devRow } = await supabaseAdmin
+        .from('users')
+        .select('specialites')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const devSpecialites: string[] = devRow?.specialites || [];
+
+      missionsWithMatch = missionsWithMatch
+        .map((m: any) => {
+          const required: string[] = m.required_specialites || [];
+          const isRecommended = devSpecialites.length > 0 && required.some((s) => devSpecialites.includes(s));
+          return { ...m, is_recommended: isRecommended };
+        })
+        .sort((a: any, b: any) => Number(b.is_recommended) - Number(a.is_recommended));
+    }
+
     generateAuditLog({
       action: 'MISSIONS_LIST_ACCESSED',
       userId,
       ipAddress: ip,
       status: 'SUCCESS',
-      details: `Consultation de la liste des missions (${missions?.length ?? 0} résultat(s), rôle: ${role}).`,
+      details: `Consultation de la liste des missions (${missionsWithMatch.length} résultat(s), rôle: ${role}).`,
     });
 
-    res.status(200).json({ missions: missions || [] });
+    res.status(200).json({ missions: missionsWithMatch });
   } catch (err: any) {
     generateAuditLog({
       action: 'MISSIONS_LIST_FAILED',
