@@ -763,12 +763,7 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                   className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer"
                 >
                   ⬅ Retour Paiement
-                type="button"
-                  disabled={isVerifyingSmileId}
-                  onClick={() => setRecruitStep(2)}
-                  className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer"
-                >
-                  ⬅ Retour Paiement
+                
                 </button>
                 <button
                   type="button"
