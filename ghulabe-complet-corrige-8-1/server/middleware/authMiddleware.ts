@@ -77,6 +77,32 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 }
 
 /**
+ * Authentification optionnelle : si un Bearer token valide est présent, peuple req.user
+ * (comme requireAuth). Sinon, laisse passer sans erreur — utilisé sur les routes qui doivent
+ * rester accessibles en anonyme (scan gratuit) tout en reconnaissant un utilisateur connecté
+ * quand il l'est (ex: /scan/start doit générer et lier le rapport PDF si l'appelant est identifié).
+ */
+export function optionalAuth(req: Request, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    next();
+    return;
+  }
+
+  const token = authHeader.split(' ')[1];
+  const result = verifyAccessToken(token);
+
+  if (result.valid) {
+    req.user = result.payload;
+  }
+  // Token absent, expiré ou invalide : on ne bloque jamais ici, le scan reste utilisable
+  // en mode anonyme (req.user restera undefined, comportement identique à avant).
+
+  next();
+}
+
+/**
  * Exige impérativement le 2FA validé pour les routes développeurs certifiés et administrateurs
  */
 export function require2FA(req: Request, res: Response, next: NextFunction): void {
