@@ -3,6 +3,7 @@ import authRoutes from './routes/authRoutes';
 import scanRoutes from './routes/scanRoutes';
 import missionRoutes from './routes/missionRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { testDbConnection } from './config/supabase';
 import { generateAuditLog } from './utils/crypto';
@@ -51,6 +52,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // Endpoint de santé & statut système
 app.get('/api/health', async (_req: Request, res: Response) => {
@@ -84,11 +86,11 @@ app.use('*', (req: Request, res: Response) => {
 // 3. DÉMARRAGE DU SERVEUR
 // ============================================================================
 export async function startServer(): Promise<void> {
-  console.log('========================================================');
+  console.log('==========================================================');
   console.log('⚡ DÉMARRAGE DU BACKEND GHULABE © 2026');
   console.log('🛡️ Architecte Principal : Mombo Armelle Vicky');
   console.log('🌐 Hébergement Cible : Render (Europe) — Supabase EU (ghulabe.com)');
-  console.log('========================================================');
+  console.log('==========================================================');
 
   await testDbConnection();
 
