@@ -6,6 +6,7 @@ import { AfricaMap } from './AfricaMap';
 import { QCMTestView } from './QCMTestView';
 import { MissionRequestModal } from './MissionRequestModal';
 import { MissionChatModal } from './MissionChatModal';
+import { GhulabeBackend } from '../../services/apiClient';
 import { 
   UserCheck, Search, MapPin, Award, ExternalLink, 
   ArrowRight, CheckCircle2, Eye, 
@@ -15,11 +16,13 @@ import {
 interface DevsPortalViewProps {
   lang: Language;
   initialMode?: 'find' | 'become';
+  accessToken?: string;
 }
 
 export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
   lang,
-  initialMode = 'find'
+  initialMode = 'find',
+  accessToken
 }) => {
   const t = getT(lang);
   const [activeTab, setActiveTab] = useState<'find' | 'become'>(initialMode);
@@ -46,6 +49,9 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
     bio: ''
   });
   const [paymentMethod, setPaymentMethod] = useState<'airtel' | 'moov' | 'card'>('airtel');
+  const [paymentPhoneNumber, setPaymentPhoneNumber] = useState('');
+  const [isPaying, setIsPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
   const [isVerifyingSmileId, setIsVerifyingSmileId] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState(false);
   const [livenessActionDone, setLivenessActionDone] = useState(false);
@@ -96,12 +102,55 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
     setRecruitStep(2);
   };
 
-  const handleStep2Pay = () => {
-    alert(lang === 'fr' 
-      ? "✅ Paiement de 5 000 FCFA confirmé via " + paymentMethod.toUpperCase() + ".\nAccès à l'Étape 3 (Smile Identity Liveness) débloqué."
-      : "✅ 5,000 FCFA payment confirmed.\nAccess to Step 3 unlocked."
-    );
-    setRecruitStep(3);
+  const handleStep2Pay = async () => {
+    setPaymentError('');
+
+    if (!accessToken) {
+      setPaymentError(lang === 'fr'
+        ? "Connectez-vous pour effectuer le paiement."
+        : "Log in to make the payment.");
+      return;
+    }
+
+    if (paymentMethod === 'card') {
+      setPaymentError(lang === 'fr'
+        ? "Le paiement par carte n'est pas encore disponible. Utilisez Airtel Money ou Moov Money."
+        : "Card payment isn't available yet. Use Airtel Money or Moov Money.");
+      return;
+    }
+
+    if (!paymentPhoneNumber || paymentPhoneNumber.length < 8) {
+      setPaymentError(lang === 'fr'
+        ? "Entrez un numéro Mobile Money valide."
+        : "Enter a valid Mobile Money number.");
+      return;
+    }
+
+    setIsPaying(true);
+    try {
+      const result = await GhulabeBackend.initiatePayment({
+        amount: 5000,
+        phoneNumber: paymentPhoneNumber,
+        operator: paymentMethod,
+        reference: `DEV-RECRUIT-${formData.email || Date.now()}`,
+        description: 'Frais de dossier candidature développeur GHULABE',
+      }, accessToken);
+
+      if (!result.success) {
+        setPaymentError(result.message_fr || (lang === 'fr' ? "Le paiement a échoué." : "Payment failed."));
+        setIsPaying(false);
+        return;
+      }
+
+      alert(lang === 'fr'
+        ? "✅ " + result.message_fr + "\nValidez la demande envoyée sur votre téléphone, puis patientez."
+        : "✅ " + result.message_en);
+      setIsPaying(false);
+      setRecruitStep(3);
+    } catch (err: any) {
+      setPaymentError(err.message || (lang === 'fr' ? "Erreur lors du paiement." : "Payment error."));
+      setIsPaying(false);
+    }
   };
 
   const handleStartSmileVerification = () => {
@@ -597,22 +646,43 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                     {paymentMethod === 'card' && <CheckCircle2 className="w-4 h-4 text-[#0066FF]" />}
                   </button>
                 </div>
+
+                {paymentMethod !== 'card' && (
+                  <div className="pt-2">
+                    <label className="text-xs font-mono text-gray-400 block mb-1.5">
+                      {lang === 'fr' ? 'Numéro Mobile Money (ex: 074000000)' : 'Mobile Money number (e.g. 074000000)'}
+                    </label>
+                    <input
+                      type="tel"
+                      value={paymentPhoneNumber}
+                      onChange={(e) => setPaymentPhoneNumber(e.target.value)}
+                      placeholder="074000000"
+                      className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-[#FFB800]"
+                    />
+                  </div>
+                )}
+
+                {paymentError && (
+                  <p className="text-xs text-[#FF2D2D] font-mono">{paymentError}</p>
+                )}
               </div>
 
               <div className="flex justify-between items-center pt-6 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setRecruitStep(1)}
-                  className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer"
+                  disabled={isPaying}
+                  className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer disabled:opacity-50"
                 >
                   ⬅ Retour Formulaire
                 </button>
                 <button
                   type="button"
                   onClick={handleStep2Pay}
-                  className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF9900] text-[#0A0A0F] font-display font-extrabold text-sm uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(255,184,0,0.5)] cursor-pointer"
+                  disabled={isPaying}
+                  className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF9900] text-[#0A0A0F] font-display font-extrabold text-sm uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(255,184,0,0.5)] cursor-pointer disabled:opacity-60"
                 >
-                  {t.step2Pay}
+                  {isPaying ? (lang === 'fr' ? 'Paiement en cours...' : 'Processing...') : t.step2Pay}
                 </button>
               </div>
             </div>
@@ -688,6 +758,12 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
               <div className="flex justify-between items-center pt-6 border-t border-white/10">
                 <button
                   type="button"
+                  disabled={isVerifyingSmileId}
+                  onClick={() => setRecruitStep(2)}
+                  className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer"
+                >
+                  ⬅ Retour Paiement
+                type="button"
                   disabled={isVerifyingSmileId}
                   onClick={() => setRecruitStep(2)}
                   className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer"
