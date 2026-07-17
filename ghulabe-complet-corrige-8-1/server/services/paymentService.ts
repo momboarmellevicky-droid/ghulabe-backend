@@ -3,26 +3,21 @@ import { generateAuditLog } from '../utils/crypto';
 // ============================================================================
 // GHULABE — PASSERELLE DE PAIEMENT SINGPAY (Airtel Money / Moov Money Gabon)
 //
-// Contrat d'API confirmé le 02/07/2026 via le SingPay Copilot officiel
-// (tableau de bord client.singpay.ga), pas déduit ni inventé.
-//
-// ⚠️ Point non confirmé : le corps de la requête ne contient aucun champ
-// "opérateur" (Airtel/Moov) explicite — le choix semble se faire via le champ
-// `disbursement` (identifiant du canal de décaissement configuré côté
-// SingPay). Il faudra donc créer un identifiant "disbursement" par opérateur
-// dans le tableau de bord SingPay, et les référencer ci-dessous.
-// Le format exact de la RÉPONSE (nom du champ transactionId, statut) n'a
-// pas non plus été confirmé — la capture s'arrêtait avant. À vérifier au
-// premier test réel.
+// Confirmé le 17/07/2026 via la documentation Swagger officielle SingPay
+// (client.singpay.ga) :
+// - L'opérateur est choisi via l'ENDPOINT lui-même, pas via un champ
+//   "disbursement" :
+//     POST /v1/74/paiement  → Airtel Money
+//     POST /v1/62/paiement  → Moov Money
+// - Vérification de statut : GET /v1/transaction/api/status/{id}
 // ============================================================================
 
-const SINGPAY_BASE_URL = process.env.SINGPAY_BASE_URL || 'https://gateway.singpay.ga/v1/74/paiement';
-const SINGPAY_CLIENT_ID = process.env.SINGPAY_CLIENT_ID;
-const SINGPAY_CLIENT_SECRET = process.env.SINGPAY_CLIENT_SECRET;
+const SINGPAY_ENDPOINT_AIRTEL = 'https://gateway.singpay.ga/v1/74/paiement';
+const SINGPAY_ENDPOINT_MOOV = 'https://gateway.singpay.ga/v1/62/paiement';
+const SINGPAY_STATUS_URL = 'https://gateway.singpay.ga/v1/transaction/api/status';
+const SINGPAY_CLIENT_ID = process.env.SINGPAY_API_KEY;
+const SINGPAY_CLIENT_SECRET = process.env.SINGPAY_SECRET_KEY;
 const SINGPAY_WALLET_ID = process.env.SINGPAY_WALLET_ID;
-// À CONFIRMER : un identifiant "disbursement" distinct par opérateur ?
-const SINGPAY_DISBURSEMENT_AIRTEL = process.env.SINGPAY_DISBURSEMENT_AIRTEL;
-const SINGPAY_DISBURSEMENT_MOOV = process.env.SINGPAY_DISBURSEMENT_MOOV;
 const PAYMENT_TIMEOUT_MS = 15000;
 
 export type MobileMoneyOperator = 'airtel' | 'moov';
@@ -50,15 +45,13 @@ function isConfigured(): boolean {
   return Boolean(SINGPAY_CLIENT_ID && SINGPAY_CLIENT_SECRET && SINGPAY_WALLET_ID);
 }
 
-function disbursementIdFor(operator: MobileMoneyOperator): string | undefined {
-  return operator === 'airtel' ? SINGPAY_DISBURSEMENT_AIRTEL : SINGPAY_DISBURSEMENT_MOOV;
+function endpointFor(operator: MobileMoneyOperator): string {
+  return operator === 'airtel' ? SINGPAY_ENDPOINT_AIRTEL : SINGPAY_ENDPOINT_MOOV;
 }
 
 /**
  * Initie un paiement Mobile Money (Airtel Money ou Moov Money) via SingPay.
- * Endpoint, en-têtes et champs du body confirmés via la documentation
- * officielle SingPay (Copilot, 02/07/2026) :
- * POST https://gateway.singpay.ga/v1/74/paiement
+ * Endpoint choisi selon l'opérateur (voir documentation Swagger officielle).
  */
 export async function initiateMobileMoneyPayment(params: InitiatePaymentParams): Promise<PaymentResult> {
   const { amount, phoneNumber, operator, reference, userId, ip } = params;
@@ -69,7 +62,7 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
       userId,
       ipAddress: ip,
       status: 'BLOCKED',
-      details: 'SINGPAY_CLIENT_ID/SECRET/WALLET_ID absents de .env. Paiement non initié.',
+      details: 'SINGPAY_API_KEY/SECRET_KEY/WALLET_ID absents de .env. Paiement non initié.',
     });
 
     return {
@@ -80,24 +73,7 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
     };
   }
 
-  const disbursement = disbursementIdFor(operator);
-  if (!disbursement) {
-    generateAuditLog({
-      action: 'PAYMENT_SKIPPED_NO_DISBURSEMENT',
-      userId,
-      ipAddress: ip,
-      status: 'BLOCKED',
-      details: `Aucun identifiant "disbursement" configuré pour l'opérateur ${operator}.`,
-    });
-
-    return {
-      success: false,
-      status: 'failed',
-      message_fr: `Opérateur ${operator} non configuré côté SingPay. Contactez l'administrateur.`,
-      message_en: `${operator} operator not configured on SingPay side. Contact the administrator.`,
-    };
-  }
-
+  const endpoint = endpointFor(operator);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PAYMENT_TIMEOUT_MS);
 
@@ -110,7 +86,7 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
       details: `Paiement ${operator.toUpperCase()} initié : ${amount} FCFA (réf: ${reference}).`,
     });
 
-    const res = await fetch(SINGPAY_BASE_URL, {
+    const res = await fetch(endpoint, {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -124,12 +100,11 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
         reference,
         client_msisdn: phoneNumber,
         portefeuille: SINGPAY_WALLET_ID,
-        disbursement,
         isTransfer: false,
       }),
     });
 
-     const data: any = await res.json().catch(() => null);
+    const data: any = await res.json().catch(() => null);
 
     if (!res.ok || !data) {
       generateAuditLog({
@@ -194,7 +169,8 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
 
 /**
  * Vérifie le statut d'une transaction déjà initiée.
- * // À CONFIRMER : endpoint réel de vérification de statut (pas vu dans la doc consultée).
+ * Endpoint confirmé via la documentation Swagger officielle SingPay :
+ * GET /v1/transaction/api/status/{id}
  */
 export async function checkPaymentStatus(transactionId: string, userId: string, ip: string): Promise<PaymentResult> {
   if (!isConfigured()) {
@@ -207,7 +183,7 @@ export async function checkPaymentStatus(transactionId: string, userId: string, 
   }
 
   try {
-    const res = await fetch(`${SINGPAY_BASE_URL}/${transactionId}`, {
+    const res = await fetch(`${SINGPAY_STATUS_URL}/${transactionId}`, {
       method: 'GET',
       headers: {
         'x-client-id': SINGPAY_CLIENT_ID as string,
@@ -244,4 +220,5 @@ export async function checkPaymentStatus(transactionId: string, userId: string, 
       message_en: 'Unable to check payment status.',
     };
   }
-}
+      }
+      
