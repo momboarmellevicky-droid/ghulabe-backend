@@ -122,4 +122,38 @@ export const GhulabeBackend = {
       return null;
     }
   },
+
+  async initiatePayment(
+    params: { amount: number; phoneNumber: string; operator: 'airtel' | 'moov'; reference: string; description?: string },
+    token: string
+  ): Promise<{ success: boolean; transactionId?: string; status: string; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/payment/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors du paiement.');
+    }
+    return data;
+  },
+
+  async checkPaymentStatus(
+    transactionId: string,
+    token: string
+  ): Promise<{ success: boolean; transactionId?: string; status: string; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/payment/status/${transactionId}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors de la vérification du statut.');
+    }
+    return data;
+  },
 };
