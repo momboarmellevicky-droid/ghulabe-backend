@@ -50,22 +50,34 @@ export async function generateScanReportPdf(
   doc.text(`Fichiers sensibles exposés : ${facts.exposed_files.length > 0 ? facts.exposed_files.join(', ') : 'Aucun'}`);
   doc.moveDown(1.5);
 
-  doc.fontSize(14).fillColor('#000000').text('Failles détectées', { underline: true });
+  doc.fontSize(14).fillColor('#000000').text('Plan d\'Action Priorisé', { underline: true });
   doc.moveDown(0.5);
 
   if (findings.length === 0) {
     doc.fontSize(10).fillColor('#00CC6A').text('Aucune faille détectée lors de ce scan.');
   } else {
-    findings.forEach((f, i) => {
-      const color = f.severity === 'critique' ? '#FF2D2D' : f.severity === 'eleve' ? '#FF6B2D' : f.severity === 'moyen' ? '#FFB800' : '#666666';
-      doc.fontSize(11).fillColor(color).text(`${i + 1}. [${f.severity.toUpperCase()}] ${f.title_fr}`);
-      doc.fontSize(9).fillColor('#333333').text(`Impact : ${f.ceo_impact_fr}`, { indent: 15 });
-      doc.fontSize(9).fillColor('#333333').text(`Risque financier : ${f.financial_risk_fr}`, { indent: 15 });
-      doc.fontSize(9).fillColor('#333333').text(`Urgence : ${f.urgency_fr}`, { indent: 15 });
-      doc.fontSize(9).fillColor('#333333').text(`Détail technique : ${f.tech_details_fr}`, { indent: 15 });
-      doc.fontSize(9).fillColor('#0066FF').text(`Correctif : ${f.remediation_code}`, { indent: 15 });
+    const critiques = findings.filter(f => f.severity === 'critique');
+    const importants = findings.filter(f => f.severity === 'eleve');
+    const ameliorations = findings.filter(f => f.severity === 'moyen' || f.severity === 'faible');
+
+    const renderGroup = (title: string, color: string, deadline: string, items: VulnerabilityFinding[]) => {
+      if (items.length === 0) return;
+      doc.fontSize(12).fillColor(color).text(`${title} — À corriger sous ${deadline}`);
+      doc.moveDown(0.3);
+      items.forEach((f, i) => {
+        doc.fontSize(11).fillColor(color).text(`${i + 1}. ${f.title_fr}`);
+        doc.fontSize(9).fillColor('#333333').text(`Impact : ${f.ceo_impact_fr}`, { indent: 15 });
+        doc.fontSize(9).fillColor('#333333').text(`Risque financier : ${f.financial_risk_fr}`, { indent: 15 });
+        doc.fontSize(9).fillColor('#333333').text(`Détail technique : ${f.tech_details_fr}`, { indent: 15 });
+        doc.fontSize(9).fillColor('#0066FF').text(`Correctif : ${f.remediation_code}`, { indent: 15 });
+        doc.moveDown(0.5);
+      });
       doc.moveDown(0.5);
-    });
+    };
+
+    renderGroup('CRITIQUE', '#FF2D2D', '24h', critiques);
+    renderGroup('IMPORTANT', '#FFB800', '7 jours', importants);
+    renderGroup('AMÉLIORATION', '#00CC6A', '30 jours', ameliorations);
   }
 
   doc.moveDown(1.5);
