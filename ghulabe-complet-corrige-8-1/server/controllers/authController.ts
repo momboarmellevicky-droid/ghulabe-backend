@@ -6,10 +6,14 @@ import { decryptAES256, generateAuditLog } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
 import { sendOtpEmail } from '../services/emailService';
 
-// Les challenges 2FA sont persistés dans la table Supabase `two_factor_challenges` (et non
-// plus dans un Map en mémoire) : un Map ne survit pas à un redémarrage/spin-down du serveur
-// Render (free tier), ce qui invalidait le challenge d'un utilisateur en pleine connexion
-// même si les 5 minutes n'étaient pas écoulées. Correction du 17/07/2026.
+const pending2FAChallenges = new Map<string, { userId: string; email: string; role: string; plan: string; otp: string; expiresAt: number; attempts: number }>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of pending2FAChallenges.entries()) {
+    if (now > val.expiresAt) pending2FAChallenges.delete(key);
+  }
+}, 60 * 1000);
 
 const failedLoginAttempts = new Map<string, { count: number; lockedUntil: number }>();
 const MAX_ATTEMPTS = 5;
@@ -17,7 +21,7 @@ const LOCK_DURATION_MS = 15 * 60 * 1000;
 const BCRYPT_ROUNDS = 12;
 
 export async function register(req: Request, res: Response): Promise<void> {
-  const { email, password, name, country, role = 'user', plan = 'gratuit' } = req.body;
+  const { email, password, name, country, role = 'user', plan = 'gratuit', specialites = [] } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
   if (!email || !password || !name || !country) {
@@ -42,6 +46,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       country,
       role,
       plan,
+      specialites: role === 'dev' ? specialites : [],
       is_2fa_enabled: true,
       created_at: new Date().toISOString(),
     });
@@ -85,7 +90,6 @@ export async function register(req: Request, res: Response): Promise<void> {
 function isBcryptHash(value: string): boolean {
   return /^\$2[aby]\$/.test(value);
 }
-
 export async function login(req: Request, res: Response): Promise<void> {
   const { email, password, lang } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -143,13 +147,8 @@ export async function login(req: Request, res: Response): Promise<void> {
     let passwordMatches = false;
 
     if (isBcryptHash(user.password_hash)) {
-      // Compte déjà au nouveau format : vérification bcrypt standard.
       passwordMatches = await bcrypt.compare(password, user.password_hash);
     } else {
-      // Compte créé avant la migration (ancien chiffrement AES réversible).
-      // On vérifie avec l'ancienne méthode, et si le mot de passe est bon,
-      // on migre silencieusement vers bcrypt pour la prochaine fois — le
-      // client ne voit rien, ne fait rien, ça marche simplement.
       try {
         passwordMatches = decryptAES256(user.password_hash) === password;
       } catch {
@@ -179,31 +178,15 @@ export async function login(req: Request, res: Response): Promise<void> {
     const otp = process.env.NODE_ENV === 'production' ? Math.floor(100000 + Math.random() * 900000).toString() : '2026';
     const challengeId = `2fa-${Date.now()}`;
 
-    const { error: challengeInsertError } = await supabaseAdmin.from('two_factor_challenges').insert({
-      challenge_id: challengeId,
-      user_id: user.id,
+    pending2FAChallenges.set(challengeId, {
+      userId: user.id,
       email: user.email,
       role: user.role,
       plan: user.plan,
       otp,
-      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      expiresAt: Date.now() + 5 * 60 * 1000,
       attempts: 0,
     });
-
-    if (challengeInsertError) {
-      generateAuditLog({
-        action: 'LOGIN_STEP1_CHALLENGE_PERSIST_FAILED',
-        userId: user.id,
-        ipAddress: ip,
-        status: 'FAILED',
-        details: `Mot de passe validé mais échec de persistance du challenge 2FA (${email}): ${challengeInsertError.message}`,
-      });
-      res.status(500).json({
-        error_fr: "Erreur lors de la préparation de la vérification 2FA. Veuillez réessayer.",
-        error_en: "Error preparing 2FA verification. Please try again.",
-      });
-      return;
-    }
 
     const emailSent = await sendOtpEmail(email, otp, lang === 'en' ? 'en' : 'fr', user.id, ip);
 
@@ -215,7 +198,7 @@ export async function login(req: Request, res: Response): Promise<void> {
         status: 'FAILED',
         details: `Mot de passe validé mais échec d'envoi de l'email 2FA (${email}). Connexion bloquée par sécurité.`,
       });
-      await supabaseAdmin.from('two_factor_challenges').delete().eq('challenge_id', challengeId);
+      pending2FAChallenges.delete(challengeId);
       res.status(500).json({
         error_fr: "Impossible d'envoyer le code de vérification. Veuillez réessayer plus tard ou contacter le support.",
         error_en: "Unable to send verification code. Please try again later or contact support.",
@@ -246,8 +229,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   } catch (err: any) {
     res.status(500).json({ error_fr: "Erreur lors de la connexion.", details: err.message });
   }
-}
-
+      }
 export async function verify2FA(req: Request, res: Response): Promise<void> {
   const { challengeId, otp } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -257,43 +239,37 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { data: challenge, error: challengeFetchError } = await supabaseAdmin
-    .from('two_factor_challenges')
-    .select('challenge_id, user_id, email, role, plan, otp, expires_at, attempts')
-    .eq('challenge_id', challengeId)
-    .maybeSingle();
-
-  if (challengeFetchError || !challenge || new Date(challenge.expires_at).getTime() < Date.now()) {
+  const challenge = pending2FAChallenges.get(challengeId);
+  if (!challenge || Date.now() > challenge.expiresAt) {
     res.status(401).json({ error_fr: "Challenge 2FA expiré ou invalide. Veuillez vous reconnecter." });
     return;
   }
 
   if (challenge.attempts >= 5) {
-    await supabaseAdmin.from('two_factor_challenges').delete().eq('challenge_id', challengeId);
+    pending2FAChallenges.delete(challengeId);
     res.status(429).json({ error_fr: "Trop de tentatives incorrectes. Veuillez vous reconnecter." });
     return;
   }
 
   const isDevBypass = process.env.NODE_ENV !== 'production' && otp === '2026';
   if (challenge.otp !== otp && !isDevBypass) {
-    const newAttempts = challenge.attempts + 1;
-    await supabaseAdmin.from('two_factor_challenges').update({ attempts: newAttempts }).eq('challenge_id', challengeId);
+    challenge.attempts += 1;
     generateAuditLog({
       action: 'FAILED_2FA_OTP',
-      userId: challenge.user_id,
+      userId: challenge.userId,
       ipAddress: ip,
       status: 'BLOCKED',
-      details: `Code 2FA incorrect saisi (tentative ${newAttempts}/5).`,
+      details: `Code 2FA incorrect saisi (tentative ${challenge.attempts}/5).`,
     });
 
     res.status(401).json({ error_fr: "Code 2FA incorrect." });
     return;
   }
 
-  await supabaseAdmin.from('two_factor_challenges').delete().eq('challenge_id', challengeId);
+  pending2FAChallenges.delete(challengeId);
 
   const userPayload = {
-    id: challenge.user_id,
+    id: challenge.userId,
     email: challenge.email,
     role: challenge.role as 'user' | 'dev' | 'admin',
     plan: challenge.plan as 'gratuit' | 'gardien' | 'pentest_premium',
@@ -304,7 +280,7 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
 
   generateAuditLog({
     action: 'LOGIN_FULL_SUCCESS_JWT_ISSUED',
-    userId: challenge.user_id,
+    userId: challenge.userId,
     ipAddress: ip,
     status: 'SUCCESS',
     details: 'Authentification 2FA réussie. Token JWT émis (expiration 24h).',
