@@ -78,9 +78,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {currentUser.name} • Plan Actuel : <strong className="text-[#00FF88] uppercase">{currentUser.plan}</strong>
             </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        </div>useState<Ale
+                        <div className="flex items-center gap-3 w-full md:w-auto">
           <button
             onClick={() => setShowAddModal(true)}
             className="flex-1 md:flex-none px-5 py-3 rounded-xl bg-[#0066FF] hover:bg-[#0052CC] text-white font-display font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,102,255,0.4)] transition-all cursor-pointer"
@@ -153,6 +152,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
+                {dom.certified && (
+                  <div className="w-full mt-3 pt-3 border-t border-[#00FF88]/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={`https://ghulabe-backend-1.onrender.com/api/public/certification/${dom.id}/badge.svg`}
+                        alt="Badge GHULABE Certifié"
+                        className="h-10"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const embedCode = `<a href="https://ghulabe.com/verify/${dom.id}" target="_blank" rel="noopener"><img src="https://ghulabe-backend-1.onrender.com/api/public/certification/${dom.id}/badge.svg" alt="Entreprise auditée GHULABE" /></a>`;
+                        navigator.clipboard.writeText(embedCode);
+                        alert(lang === 'fr' ? '✅ Code du badge copié ! Collez-le dans le HTML de votre site.' : '✅ Badge code copied! Paste it into your site HTML.');
+                      }}
+                      className="px-3 py-2 rounded-lg bg-[#00FF88]/15 hover:bg-[#00FF88]/25 text-[#00FF88] font-mono text-xs border border-[#00FF88]/40 cursor-pointer"
+                    >
+                      Copier le code d'intégration
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -231,7 +251,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ))
             )}
           </div>
-
           <div className="glass-card p-6 rounded-2xl border border-[#0066FF]/40 bg-gradient-to-br from-[#0D1B2A] to-[#0A0A0F] space-y-3">
             <h3 className="font-display font-bold text-white text-sm">
               🛡️ Surveillance Gardien 24/7
