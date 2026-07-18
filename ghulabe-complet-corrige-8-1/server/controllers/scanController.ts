@@ -91,11 +91,11 @@ export async function startScan(req: Request, res: Response): Promise<void> {
     const score = computeSecurityScore(facts.headers_checked, facts.ssl_status, facts.exposed_files.length, findings);
     const durationSeconds = Math.round(facts.duration_ms / 1000);
     const domainStatus = score >= 7 ? 'safe' : score >= 4 ? 'warning' : 'critical';
-let scanId: string | null = null;
+
     // 3. Persistance réelle — schéma confirmé : scans.domain_id référence domains.id (pas de user_id/url/status sur scans directement)
+    let scanId: string | null = null;
     let reportPdfUrl: string | null = null;
-  let persisted = false;
-    
+    let persisted = false;
     if (userId) {
       try {
         // 3a. Cherche le domaine existant pour cet utilisateur, sinon le crée
@@ -157,7 +157,65 @@ let scanId: string | null = null;
         if (scanInsertError || !newScan) throw scanInsertError || new Error('Insertion scan échouée sans erreur explicite.');
         scanId = newScan.id;
         persisted = true;
-if (missionInsertError) throw missionInsertError;
+        // 3c. Publication automatique d'une mission freelance si le score est critique (< 4/10).
+        // Cœur du modèle économique GHULABE : un score critique déclenche immédiatement une
+        // alerte + une mission de correction proposée aux développeurs partenaires, sans
+        // intervention manuelle. Isolé dans son propre try/catch : un échec ici ne doit jamais
+        // faire échouer la réponse du scan (l'utilisateur doit recevoir son résultat quoi qu'il arrive).
+        if (domainStatus === 'critical') {
+          try {
+            const { data: userRow } = await supabaseAdmin
+              .from('users')
+              .select('name')
+              .eq('id', userId)
+              .maybeSingle();
+            const clientName = userRow?.name || 'Client GHULABE';
+
+            const criticalCount = findings.filter((f) => f.severity === 'critique').length;
+            const alertMessageFr = `⚠️ Score critique (${score}/10) détecté sur ${cleanUrl}. ${criticalCount} faille(s) critique(s) identifiée(s). Une mission de correction a été publiée automatiquement.`;
+            const alertMessageEn = `⚠️ Critical score (${score}/10) detected on ${cleanUrl}. ${criticalCount} critical vulnerability(ies) found. A remediation mission has been published automatically.`;
+
+            // 3c-i. Alerte liée au domaine et à l'utilisateur (alerts.user_id existe : pas besoin de jointure via domains).
+            const { data: newAlert, error: alertInsertError } = await supabaseAdmin
+              .from('alerts')
+              .insert({
+                domain_id: domainId,
+                user_id: userId,
+                severity: 'critique',
+                message: alertMessageFr,
+                message_fr: alertMessageFr,
+                message_en: alertMessageEn,
+                is_read: false,
+              })
+              .select('id')
+              .single();
+
+            if (alertInsertError || !newAlert) throw alertInsertError || new Error('Insertion alerte échouée sans erreur explicite.');
+
+            // 3c-ii. Mission liée à l'alerte, pas encore assignée : assigned_dev_id (→ users) et
+            // developer_id (→ dev_applications) restent null jusqu'à ce qu'un développeur postule/soit assigné.
+            const missionDescriptionFr = `Correction urgente requise suite à un scan GHULABE : score ${score}/10 sur ${cleanUrl}. ${criticalCount} faille(s) critique(s) détectée(s) nécessitant une intervention immédiate.`;
+
+            const requiredSpecialites = computeRequiredSpecialties(findings);
+
+            const { error: missionInsertError } = await supabaseAdmin
+              .from('missions')
+              .insert({
+                alert_id: newAlert.id,
+                client_id: userId,
+                client_name: clientName,
+                developer_id: null,
+                developer_name: null,
+                assigned_dev_id: null,
+                description: missionDescriptionFr,
+                url: cleanUrl,
+                urgency: 'Critique',
+                budget_fcfa: 50000,
+                status: 'requested',
+                legal_checkbox_accepted: true,
+                required_specialites: requiredSpecialites,
+              });
+            if (missionInsertError) throw missionInsertError;
 
             generateAuditLog({
               action: 'MISSION_AUTO_PUBLISHED',
@@ -238,7 +296,7 @@ if (missionInsertError) throw missionInsertError;
     });
     res.status(500).json({ error_fr: "Erreur critique lors du scan.", details: err.message });
   }
-    }
+}
 export async function getScanReport(req: Request, res: Response): Promise<void> {
   const { scanId } = req.params;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -429,7 +487,7 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
       details: `Consultation de l'historique (${history.length} scan(s)) pour le domaine ${domainId}.`,
     });
 
-    res.status(200).json({
+   res.status(200).json({
       domainId,
       url: domain.url,
       totalScans: history.length,
@@ -447,8 +505,7 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
     });
     res.status(500).json({ error_fr: "Erreur critique lors de la lecture de l'historique.", details: err.message });
   }
-}
-export async function previewScan(req: Request, res: Response): Promise<void> {
+}export async function previewScan(req: Request, res: Response): Promise<void> {
   const { url, legalCheckboxAccepted } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
