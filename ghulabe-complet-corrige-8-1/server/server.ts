@@ -3,6 +3,7 @@ import authRoutes from './routes/authRoutes';
 import scanRoutes from './routes/scanRoutes';
 import missionRoutes from './routes/missionRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import certificationRoutes from './routes/certificationRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { testDbConnection } from './config/supabase';
@@ -52,6 +53,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/public/certification', certificationRoutes);
 app.use('/api/payment', paymentRoutes);
 
 // Endpoint de santé & statut système
