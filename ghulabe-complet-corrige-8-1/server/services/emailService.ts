@@ -88,3 +88,90 @@ export async function sendOtpEmail(
     return false;
   }
 }
+/**
+ * Alerte email envoyée lors de la surveillance hebdomadaire GHULABE (plan Gardien)
+ * quand de nouvelles failles apparaissent sur un domaine surveillé, ou que le
+ * score de sécurité a chuté depuis le dernier scan.
+ */
+export async function sendVulnerabilityAlertEmail(
+  toEmail: string,
+  domainUrl: string,
+  newFindingsCount: number,
+  criticalCount: number,
+  score: number,
+  lang: 'fr' | 'en',
+  userId: string,
+  ip: string
+): Promise<boolean> {
+  if (!RESEND_API_KEY) {
+    generateAuditLog({
+      action: 'EMAIL_MONITORING_ALERT_SKIPPED',
+      userId,
+      ipAddress: ip,
+      status: 'BLOCKED',
+      details: `Alerte surveillance ignorée (RESEND_API_KEY non configurée) pour ${toEmail}.`,
+    });
+    return false;
+  }
+
+  const subject = lang === 'en'
+    ? `⚠️ GHULABE Alert: ${newFindingsCount} new issue(s) on ${domainUrl}`
+    : `⚠️ Alerte GHULABE : ${newFindingsCount} nouvelle(s) faille(s) sur ${domainUrl}`;
+
+  const bodyText = lang === 'en'
+    ? `Your weekly GHULABE monitoring scan found ${newFindingsCount} new vulnerability(ies) on ${domainUrl} (${criticalCount} critical). Current score: ${score}/10. Log in to GHULABE to see the full report.`
+    : `Votre scan de surveillance hebdomadaire GHULABE a détecté ${newFindingsCount} nouvelle(s) faille(s) sur ${domainUrl} (${criticalCount} critique(s)). Score actuel : ${score}/10. Connectez-vous à GHULABE pour voir le rapport complet.`;
+
+  const html = `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;">
+    <h2 style="color:#FF2D2D;">⚠️ GHULABE — ${lang === 'en' ? 'New vulnerabilities detected' : 'Nouvelles failles détectées'}</h2>
+    <p>${bodyText}</p>
+    <p style="font-size:28px;font-weight:bold;color:${score >= 7 ? '#00FF88' : score >= 4 ? '#FF6B2D' : '#FF2D2D'};">${score}/10</p>
+  </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+        to: [toEmail],
+        subject,
+        html,
+        text: bodyText,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      generateAuditLog({
+        action: 'EMAIL_MONITORING_ALERT_FAILED',
+        userId,
+        ipAddress: ip,
+        status: 'FAILED',
+        details: `Échec envoi alerte surveillance à ${toEmail} : ${res.status} ${errorBody}`,
+      });
+      return false;
+    }
+
+    generateAuditLog({
+      action: 'EMAIL_MONITORING_ALERT_SENT',
+      userId,
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: `Alerte surveillance envoyée à ${toEmail} pour ${domainUrl} (${newFindingsCount} nouvelle(s) faille(s)).`,
+    });
+    return true;
+  } catch (err: any) {
+    generateAuditLog({
+      action: 'EMAIL_MONITORING_ALERT_FAILED',
+      userId,
+      ipAddress: ip,
+      status: 'FAILED',
+      details: `Échec envoi alerte surveillance à ${toEmail} : ${err.message}`,
+    });
+    return false;
+  }
+}
