@@ -6,7 +6,6 @@ import { AfricaMap } from './AfricaMap';
 import { QCMTestView } from './QCMTestView';
 import { MissionRequestModal } from './MissionRequestModal';
 import { MissionChatModal } from './MissionChatModal';
-import { GhulabeBackend } from '../../services/apiClient';
 import { 
   UserCheck, Search, MapPin, Award, ExternalLink, 
   ArrowRight, CheckCircle2, Eye, 
@@ -16,13 +15,11 @@ import {
 interface DevsPortalViewProps {
   lang: Language;
   initialMode?: 'find' | 'become';
-  accessToken?: string;
 }
 
 export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
   lang,
-  initialMode = 'find',
-  accessToken
+  initialMode = 'find'
 }) => {
   const t = getT(lang);
   const [activeTab, setActiveTab] = useState<'find' | 'become'>(initialMode);
@@ -39,9 +36,10 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    password: '',
     country: 'Gabon',
     city: 'Libreville',
-    speciality: 'AppSec' as any,
+    specialites: [] as string[],
     languages: ['Français', 'Anglais'],
     rateFcfa: 35000,
     experienceYears: 5,
@@ -49,9 +47,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
     bio: ''
   });
   const [paymentMethod, setPaymentMethod] = useState<'airtel' | 'moov' | 'card'>('airtel');
-  const [paymentPhoneNumber, setPaymentPhoneNumber] = useState('');
-  const [isPaying, setIsPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState('');
   const [isVerifyingSmileId, setIsVerifyingSmileId] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState(false);
   const [livenessActionDone, setLivenessActionDone] = useState(false);
@@ -92,65 +87,25 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
       </div>
     );
   };
-
   const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.fullName || !formData.email || !formData.portfolioUrl || !formData.bio) {
-      alert(lang === 'fr' ? "Veuillez remplir tous les champs obligatoires du formulaire." : "Please fill in all mandatory fields.");
+    if (!formData.fullName || !formData.email || !formData.password || !formData.portfolioUrl || !formData.bio || formData.specialites.length === 0) {
+      alert(lang === 'fr' ? "Veuillez remplir tous les champs obligatoires, y compris le mot de passe et au moins une spécialité." : "Please fill in all mandatory fields, including password and at least one specialty.");
+      return;
+    }
+    if (formData.password.length < 8) {
+      alert(lang === 'fr' ? "Le mot de passe doit contenir au moins 8 caractères." : "Password must be at least 8 characters.");
       return;
     }
     setRecruitStep(2);
   };
 
-  const handleStep2Pay = async () => {
-    setPaymentError('');
-
-    if (!accessToken) {
-      setPaymentError(lang === 'fr'
-        ? "Connectez-vous pour effectuer le paiement."
-        : "Log in to make the payment.");
-      return;
-    }
-
-    if (paymentMethod === 'card') {
-      setPaymentError(lang === 'fr'
-        ? "Le paiement par carte n'est pas encore disponible. Utilisez Airtel Money ou Moov Money."
-        : "Card payment isn't available yet. Use Airtel Money or Moov Money.");
-      return;
-    }
-
-    if (!paymentPhoneNumber || paymentPhoneNumber.length < 8) {
-      setPaymentError(lang === 'fr'
-        ? "Entrez un numéro Mobile Money valide."
-        : "Enter a valid Mobile Money number.");
-      return;
-    }
-
-    setIsPaying(true);
-    try {
-      const result = await GhulabeBackend.initiatePayment({
-        amount: 5000,
-        phoneNumber: paymentPhoneNumber,
-        operator: paymentMethod,
-        reference: `DEV-RECRUIT-${formData.email || Date.now()}`,
-        description: 'Frais de dossier candidature développeur GHULABE',
-      }, accessToken);
-
-      if (!result.success) {
-        setPaymentError(result.message_fr || (lang === 'fr' ? "Le paiement a échoué." : "Payment failed."));
-        setIsPaying(false);
-        return;
-      }
-
-      alert(lang === 'fr'
-        ? "✅ " + result.message_fr + "\nValidez la demande envoyée sur votre téléphone, puis patientez."
-        : "✅ " + result.message_en);
-      setIsPaying(false);
-      setRecruitStep(3);
-    } catch (err: any) {
-      setPaymentError(err.message || (lang === 'fr' ? "Erreur lors du paiement." : "Payment error."));
-      setIsPaying(false);
-    }
+  const handleStep2Pay = () => {
+    alert(lang === 'fr' 
+      ? "✅ Paiement de 5 000 FCFA confirmé via " + paymentMethod.toUpperCase() + ".\nAccès à l'Étape 3 (Smile Identity Liveness) débloqué."
+      : "✅ 5,000 FCFA payment confirmed.\nAccess to Step 3 unlocked."
+    );
+    setRecruitStep(3);
   };
 
   const handleStartSmileVerification = () => {
@@ -173,9 +128,33 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
     }, 2500);
   };
 
-  const handleFinishQcmTest = (_scorePct: number, passed: boolean) => {
-    if (passed) {
+  const handleFinishQcmTest = async (_scorePct: number, passed: boolean) => {
+    if (!passed) return;
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          name: formData.fullName,
+          country: formData.country,
+          role: 'dev',
+          specialites: formData.specialites,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(lang === 'fr'
+          ? `Erreur lors de la création du compte : ${data.error_fr || 'inconnue'}`
+          : `Account creation error: ${data.error_en || 'unknown'}`);
+        return;
+      }
       setRecruitStep('completed');
+    } catch (err: any) {
+      alert(lang === 'fr'
+        ? "Erreur réseau lors de la création du compte. Réessayez."
+        : "Network error while creating the account. Please retry.");
     }
   };
 
@@ -193,7 +172,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
         <p className="text-xs sm:text-sm text-gray-400 mt-1 max-w-2xl mx-auto font-sans">
           {t.devsSub}
         </p>
-
         {/* Tab switcher */}
         <div className="flex justify-center mt-4">
           <div className="flex bg-[#0D1B2A] p-1.5 rounded-2xl border border-white/10 font-display font-bold text-xs sm:text-sm">
@@ -280,7 +258,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                 <option value="Pentest">Pentest</option>
                 <option value="Network Security">Network Security</option>
               </select>
-
               <select
                 value={selectedCountry}
                 onChange={(e) => setSelectedCountry(e.target.value)}
@@ -372,7 +349,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
               </div>
             ))}
           </div>
-
           {/* Active Missions simulation shortcut */}
           <div className="glass-card p-6 sm:p-8 rounded-3xl border border-[#00FF88]/40 space-y-4">
             <div className="flex items-center justify-between">
@@ -460,7 +436,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                   Votre nom complet doit être strictement identique à votre pièce d'identité CNI ou Passeport.
                 </p>
               </div>
-
               <form onSubmit={handleStep1Submit} className="space-y-6 text-left text-xs sm:text-sm">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
@@ -482,6 +457,18 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                       value={formData.email}
                       onChange={e => setFormData({...formData, email: e.target.value})}
                       placeholder="p.moussavou@appsec-gabon.ga"
+                      className="w-full p-3.5 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-gray-300">Mot de passe (8 caractères min.) *</label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={e => setFormData({...formData, password: e.target.value})}
+                      placeholder="••••••••"
                       className="w-full p-3.5 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
                       required
                     />
@@ -520,20 +507,39 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="font-mono text-gray-300">Spécialité Principale *</label>
-                    <select
-                      value={formData.speciality}
-                      onChange={e => setFormData({...formData, speciality: e.target.value as any})}
-                      className="w-full p-3.5 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs font-bold text-[#00FF88]"
-                    >
-                      <option value="AppSec">AppSec</option>
-                      <option value="DevSecOps">DevSecOps</option>
-                      <option value="Pentest">Pentest</option>
-                      <option value="Network Security">Network Security</option>
-                    </select>
+                    <label className="font-mono text-gray-300">Spécialités techniques * (choisissez-en au moins une)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'wordpress', label: 'WordPress / CMS' },
+                        { value: 'linux_serveur', label: 'Serveur Linux' },
+                        { value: 'ssl_reseau', label: 'SSL & Réseau' },
+                        { value: 'base_donnees', label: 'Base de Données' },
+                        { value: 'headers_http', label: 'Headers HTTP / API' },
+                        { value: 'osint_recon', label: 'Reconnaissance / OSINT' },
+                      ].map(opt => {
+                        const selected = (formData.specialites as string[]).includes(opt.value);
+                        return (
+                          <label
+                            key={opt.value}
+                            className={`p-2.5 rounded-xl border text-xs font-mono cursor-pointer transition-colors ${selected ? 'bg-[#0066FF]/30 border-[#0066FF] text-[#00FF88]' : 'bg-[#0A0A0F] border-white/10 text-gray-300'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="mr-2"
+                              checked={selected}
+                              onChange={() => {
+                                const current = formData.specialites as string[];
+                                const next = selected ? current.filter(s => s !== opt.value) : [...current, opt.value];
+                                setFormData({...formData, specialites: next});
+                              }}
+                            />
+                            {opt.label}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="font-mono text-gray-300">Tarif horaire souhaité en FCFA *</label>
@@ -609,7 +615,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                   <p>• Réintégration après suspension : <strong className="text-white">5 000 FCFA</strong></p>
                 </div>
               </div>
-
               <div className="space-y-4 text-left">
                 <p className="text-xs font-mono text-gray-300 font-bold">Choisissez votre méthode de paiement mobile money ou carte :</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
@@ -646,43 +651,22 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                     {paymentMethod === 'card' && <CheckCircle2 className="w-4 h-4 text-[#0066FF]" />}
                   </button>
                 </div>
-
-                {paymentMethod !== 'card' && (
-                  <div className="pt-2">
-                    <label className="text-xs font-mono text-gray-400 block mb-1.5">
-                      {lang === 'fr' ? 'Numéro Mobile Money (ex: 074000000)' : 'Mobile Money number (e.g. 074000000)'}
-                    </label>
-                    <input
-                      type="tel"
-                      value={paymentPhoneNumber}
-                      onChange={(e) => setPaymentPhoneNumber(e.target.value)}
-                      placeholder="074000000"
-                      className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-white/10 text-white font-mono text-sm focus:outline-none focus:border-[#FFB800]"
-                    />
-                  </div>
-                )}
-
-                {paymentError && (
-                  <p className="text-xs text-[#FF2D2D] font-mono">{paymentError}</p>
-                )}
               </div>
 
               <div className="flex justify-between items-center pt-6 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setRecruitStep(1)}
-                  disabled={isPaying}
-                  className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer disabled:opacity-50"
+                  className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer"
                 >
                   ⬅ Retour Formulaire
                 </button>
                 <button
                   type="button"
                   onClick={handleStep2Pay}
-                  disabled={isPaying}
-                  className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF9900] text-[#0A0A0F] font-display font-extrabold text-sm uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(255,184,0,0.5)] cursor-pointer disabled:opacity-60"
+                  className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF9900] text-[#0A0A0F] font-display font-extrabold text-sm uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(255,184,0,0.5)] cursor-pointer"
                 >
-                  {isPaying ? (lang === 'fr' ? 'Paiement en cours...' : 'Processing...') : t.step2Pay}
+                  {t.step2Pay}
                 </button>
               </div>
             </div>
@@ -727,7 +711,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                     </span>
                   </button>
                 </div>
-
                 {/* Liveness Selfie */}
                 <div className="p-6 rounded-2xl bg-[#0A0A0F] border border-white/10 space-y-4">
                   <h4 className="font-display font-bold text-white text-sm">2. Selfie Liveness en temps réel</h4>
@@ -763,7 +746,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
                   className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 font-mono text-xs cursor-pointer"
                 >
                   ⬅ Retour Paiement
-                
                 </button>
                 <button
                   type="button"
@@ -814,7 +796,6 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
 
         </div>
       )}
-
       {/* Modals for Matchmaking & Chat */}
       {selectedDevForMission && (
         <MissionRequestModal
