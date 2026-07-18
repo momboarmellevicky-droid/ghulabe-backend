@@ -65,6 +65,9 @@ export interface Domain {
   last_scan?: string;
   score?: number;
   status: 'safe' | 'warning' | 'critical' | 'unscanned';
+  certified?: boolean;
+  certified_at?: string;
+  certification_score?: number;
 }
 
 export type BadgeLevel = 'GHULABE RECRUIT' | 'GHULABE CERTIFIED' | 'GHULABE EXPERT';
