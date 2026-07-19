@@ -78,7 +78,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {currentUser.name} • Plan Actuel : <strong className="text-[#00FF88] uppercase">{currentUser.plan}</strong>
             </p>
           </div>
-        </div>useState<Ale
+        </div>
                         <div className="flex items-center gap-3 w-full md:w-auto">
           <button
             onClick={() => setShowAddModal(true)}
