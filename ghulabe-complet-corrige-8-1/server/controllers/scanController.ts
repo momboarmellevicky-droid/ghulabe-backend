@@ -10,7 +10,7 @@ import { generateScanReportPdf } from '../services/pdfReportService';
  * (headers manquants, SSL invalide/expirant, fichiers exposés, gravité des
  * verdicts générés). Remplace le score fixe 3.2 précédemment codé en dur.
  */
-export function computeSecurityScore(function computeSecurityScore(
+export function computeSecurityScore(
   headers: { hsts: boolean; csp: boolean; x_frame_options: boolean; x_content_type_options: boolean },
   ssl: { valid: boolean; expires_in_days: number },
   exposedFilesCount: number,
