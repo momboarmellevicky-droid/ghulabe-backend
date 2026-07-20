@@ -18,7 +18,7 @@ const SINGPAY_STATUS_URL = 'https://gateway.singpay.ga/v1/transaction/api/status
 const SINGPAY_CLIENT_ID = process.env.SINGPAY_API_KEY;
 const SINGPAY_CLIENT_SECRET = process.env.SINGPAY_SECRET_KEY;
 const SINGPAY_WALLET_ID = process.env.SINGPAY_WALLET_ID;
-const PAYMENT_TIMEOUT_MS = 15000;
+const PAYMENT_TIMEOUT_MS = 30000;
 
 export type MobileMoneyOperator = 'airtel' | 'moov';
 
@@ -220,5 +220,4 @@ export async function checkPaymentStatus(transactionId: string, userId: string, 
       message_en: 'Unable to check payment status.',
     };
   }
-      }
-      
+  }
