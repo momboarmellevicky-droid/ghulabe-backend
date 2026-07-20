@@ -12,6 +12,7 @@ import { MeView } from './components/me/MeView';
 import { LegalModal } from './components/legal/LegalModal';
 import { AuthView, BackendAuthUser } from './components/auth/AuthView';
 import { GhulabeBackend } from './services/apiClient';
+import { PaymentModal } from './components/common/PaymentModal';
 
 export const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('fr');
@@ -68,6 +69,7 @@ export const App: React.FC = () => {
   const [isScanAutoStarted, setIsScanAutoStarted] = useState(false);
   const [devPortalMode, setDevPortalMode] = useState<'find' | 'become'>('find');
   const [legalPage, setLegalPage] = useState<'mentions' | 'privacy' | 'cgu' | 'disclaimer' | 'cookies' | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<'gardien' | 'pentest_premium' | null>(null);
 
   // Set document title dynamically
   useEffect(() => {
@@ -154,16 +156,24 @@ export const App: React.FC = () => {
   };
 
   const handleUpgradePlan = (newPlan: 'gratuit' | 'gardien' | 'pentest_premium') => {
-    setCurrentUser({
-      ...currentUser,
-      plan: newPlan
-    });
-    alert(lang === 'fr'
-      ? `🎉 Félicitations ! Offre ${newPlan.toUpperCase()} activée.\n\nPaiement FCFA confirmé et chiffrement des données garanti.`
-      : `🎉 Plan upgraded to ${newPlan.toUpperCase()}!`
-    );
+    if (newPlan === 'gratuit') {
+      setCurrentUser({ ...currentUser, plan: newPlan });
+      return;
+    }
+    if (!accessToken) {
+      alert(lang === 'fr'
+        ? "Connectez-vous d'abord pour souscrire à une offre payante."
+        : "Please log in first to subscribe to a paid plan.");
+      return;
+    }
+    setPendingPlan(newPlan);
   };
 
+  const handlePaymentSuccess = (confirmedPlan: 'gardien' | 'pentest_premium') => {
+    setCurrentUser({ ...currentUser, plan: confirmedPlan });
+    if (sessionUser) setSessionUser({ ...sessionUser, plan: confirmedPlan });
+    setPendingPlan(null);
+  };
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#0A0A0F] text-gray-100 selection:bg-[#0066ff]">
 
@@ -278,6 +288,16 @@ export const App: React.FC = () => {
         page={legalPage}
         onClose={() => setLegalPage(null)}
       />
+
+      {pendingPlan && accessToken && (
+        <PaymentModal
+          lang={lang}
+          targetPlan={pendingPlan}
+          accessToken={accessToken}
+          onClose={() => setPendingPlan(null)}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
 
       {/* Footer on all pages (Exclusif) */}
       <Footer
