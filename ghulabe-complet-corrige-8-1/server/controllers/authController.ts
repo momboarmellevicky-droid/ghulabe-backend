@@ -314,3 +314,29 @@ export async function logout(req: Request, res: Response): Promise<void> {
     message_en: "Logged out successfully.",
   });
 }
+export async function listDevelopers(req: Request, res: Response): Promise<void> {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+  try {
+    const { data: devs, error } = await supabaseAdmin
+      .from('users')
+      .select('id, name, country, city, bio, rate_fcfa, portfolio_url, badge_level, rating, missions_completed, specialites')
+      .eq('role', 'dev');
+
+    if (error) {
+      res.status(500).json({ error_fr: "Erreur lors de la récupération des développeurs.", details: error.message });
+      return;
+    }
+
+    generateAuditLog({
+      action: 'DEVS_LIST_ACCESSED',
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: `Liste des développeurs consultée (${devs?.length || 0} résultat(s)).`,
+    });
+
+    res.status(200).json({ developers: devs || [] });
+  } catch (err: any) {
+    res.status(500).json({ error_fr: "Erreur serveur lors de la récupération des développeurs.", details: err.message });
+  }
+}
