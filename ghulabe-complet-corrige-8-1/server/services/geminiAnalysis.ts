@@ -8,7 +8,7 @@ import type { RawScanFacts } from './scanEngine';
 // l'interface (impact CEO, risque financier, urgence, code de remédiation).
 // Gemini n'effectue AUCUNE requête réseau vers la cible : il ne fait
 // qu'interpréter des données déjà collectées par le vrai moteur de scan.
-// ============================================================================
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
