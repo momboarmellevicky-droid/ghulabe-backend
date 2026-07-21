@@ -21,7 +21,7 @@ const LOCK_DURATION_MS = 15 * 60 * 1000;
 const BCRYPT_ROUNDS = 12;
 
 export async function register(req: Request, res: Response): Promise<void> {
-  const { email, password, name, country, role = 'user', plan = 'gratuit', specialites = [] } = req.body;
+  const { email, password, name, country, role = 'user', plan = 'gratuit', specialites = [], city, bio, rateFcfa, portfolioUrl } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
   if (!email || !password || !name || !country) {
@@ -47,6 +47,10 @@ export async function register(req: Request, res: Response): Promise<void> {
       role,
       plan,
       specialites: role === 'dev' ? specialites : [],
+      city: role === 'dev' ? city : null,
+      bio: role === 'dev' ? bio : null,
+      rate_fcfa: role === 'dev' ? rateFcfa : null,
+      portfolio_url: role === 'dev' ? portfolioUrl : null,
       is_2fa_enabled: true,
       created_at: new Date().toISOString(),
     });
