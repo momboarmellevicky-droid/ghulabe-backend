@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Developer, Language, Mission } from '../../types';
 import { getT } from '../../data/i18n';
 import { MOCK_MISSIONS } from '../../data/mockData';
