@@ -11,7 +11,7 @@ import type { RawScanFacts } from './scanEngine';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+cons
 const GEMINI_TIMEOUT_MS = 20000;
 
 // Reproduit volontairement la forme de VulnerabilityFinding (src/types.ts)
