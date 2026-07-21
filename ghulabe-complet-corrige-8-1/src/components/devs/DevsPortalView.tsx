@@ -141,6 +141,10 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
           country: formData.country,
           role: 'dev',
           specialites: formData.specialites,
+          city: formData.city,
+          bio: formData.bio,
+          rateFcfa: formData.rateFcfa,
+          portfolioUrl: formData.portfolioUrl,
         }),
       });
       const data = await res.json();
