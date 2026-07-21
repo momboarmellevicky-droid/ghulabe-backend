@@ -50,9 +50,32 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
   const [isVerifyingSmileId, setIsVerifyingSmileId] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState(false);
   const [livenessActionDone, setLivenessActionDone] = useState(false);
+  const [realDevelopers, setRealDevelopers] = useState<Developer[]>([]);
+
+  useEffect(() => {
+    fetch('/api/auth/developers')
+      .then((res) => res.json())
+      .then((data) => {
+        const devs = (data.developers || []).map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          country: d.country,
+          city: d.city || '',
+          bio: d.bio || '',
+          rate_fcfa: d.rate_fcfa || 0,
+          portfolio_url: d.portfolio_url || '',
+          badge_level: d.badge_level || 'GHULABE RECRUIT',
+          rating: d.rating || 0,
+          missions_completed: d.missions_completed || 0,
+          speciality: (d.specialites && d.specialites[0]) || '',
+        }));
+        setRealDevelopers(devs);
+      })
+      .catch(() => setRealDevelopers([]));
+  }, []);
 
   // Filter developers
-  const filteredDevs: Developer[] = ([] as Developer[]).filter(dev => {
+  const filteredDevs: Developer[] = realDevelopers.filter(dev => {
     if (filterSpeciality !== 'all' && dev.speciality !== filterSpeciality) return false;
     if (selectedCountry !== 'all' && dev.country !== selectedCountry) return false;
     if (searchQuery) {
