@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Developer, Language, Mission } from '../../types';
 import { getT } from '../../data/i18n';
-import { MOCK_DEVELOPERS, MOCK_MISSIONS } from '../../data/mockData';
+import { MOCK_MISSIONS } from '../../data/mockData';
 import { AfricaMap } from './AfricaMap';
 import { QCMTestView } from './QCMTestView';
 import { MissionRequestModal } from './MissionRequestModal';
@@ -52,7 +52,7 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
   const [livenessActionDone, setLivenessActionDone] = useState(false);
 
   // Filter developers
-  const filteredDevs = MOCK_DEVELOPERS.filter(dev => {
+  const filteredDevs: Developer[] = ([] as Developer[]).filter(dev => {
     if (filterSpeciality !== 'all' && dev.speciality !== filterSpeciality) return false;
     if (selectedCountry !== 'all' && dev.country !== selectedCountry) return false;
     if (searchQuery) {
@@ -225,7 +225,7 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
             </div>
 
             <AfricaMap
-              developers={MOCK_DEVELOPERS}
+              developers={[]}
               selectedCountry={selectedCountry === 'all' ? undefined : selectedCountry}
               onSelectDeveloper={(dev) => {
                 setSelectedCountry(dev.country);
