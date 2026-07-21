@@ -252,7 +252,7 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
             </div>
 
             <AfricaMap
-              developers={[]}
+              developers={realDevelopers}
               selectedCountry={selectedCountry === 'all' ? undefined : selectedCountry}
               onSelectDeveloper={(dev) => {
                 setSelectedCountry(dev.country);
