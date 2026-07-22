@@ -142,7 +142,7 @@ const handleStep2Pay = async () => {
 
   setIsProcessingPayment(true);
   try {
-    c`${API_BASE_URL}/recruitment/start`
+    const res = await fetch(`${API_BASE_URL}/recruitment/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
