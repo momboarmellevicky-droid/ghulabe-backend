@@ -779,10 +779,11 @@ const handleStep2Pay = async () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleStep2Pay}
-                  className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF9900] text-[#0A0A0F] font-display font-extrabold text-sm uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(255,184,0,0.5)] cursor-pointer"
-                >
-                  {t.step2Pay}
+        onClick={handleStep2Pay}
+        disabled={isProcessingPayment}
+        className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#0066FF] to-[#00FF88] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-display font-bold text-sm uppercase tracking-wide shadow-[0_0_20px_rgba(0,102,255,0.4)] transition-all flex items-center gap-2 cursor-pointer"
+      >
+        {isProcessingPayment ? (lang === 'fr' ? 'Paiement en cours...' : 'Processing payment...') : t.step2Pay}
                 </button>
               </div>
             </div>
