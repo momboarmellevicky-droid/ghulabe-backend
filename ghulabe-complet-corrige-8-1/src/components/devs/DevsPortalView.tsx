@@ -47,6 +47,7 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
     bio: ''
   });
   const [paymentMethod, setPaymentMethod] = useState<'airtel' | 'moov' | 'card'>('airtel');
+const [recruitPhone, setRecruitPhone] = useState('');
   const [isVerifyingSmileId, setIsVerifyingSmileId] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState(false);
   const [livenessActionDone, setLivenessActionDone] = useState(false);
