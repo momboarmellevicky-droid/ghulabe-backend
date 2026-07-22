@@ -127,7 +127,7 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
     // À CONFIRMER : nom exact des champs de la réponse SingPay (non vu dans la doc).
     // Fallback large en attendant le premier test réel.
     const transactionId: string | undefined =
-      data.transaction_id || data.id || data.reference || data.transactionId;
+      data.transaction?.id || data.transaction_id || data.id || data.reference || data.transactionId;
     const status: PaymentResult['status'] =
       data.status === 'success' || data.status === 'SUCCESS' ? 'success' : 'pending';
 
