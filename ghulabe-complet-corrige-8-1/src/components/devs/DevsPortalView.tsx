@@ -11,7 +11,7 @@ import {
   ArrowRight, CheckCircle2, Eye, 
   CreditCard, Smartphone, ShieldAlert, Briefcase
 } from 'lucide-react';
-
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'https://ghulabe-backend-1.onrender.com/api';
 interface DevsPortalViewProps {
   lang: Language;
   initialMode?: 'find' | 'become';
@@ -142,7 +142,7 @@ const handleStep2Pay = async () => {
 
   setIsProcessingPayment(true);
   try {
-    const res = await fetch('/api/recruitment/start', {
+    c`${API_BASE_URL}/recruitment/start`
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -181,7 +181,7 @@ const handleStep2Pay = async () => {
     const poll = setInterval(async () => {
       attempts++;
       try {
-        const statusRes = await fetch(`/api/recruitment/status/${data.transactionId}`);
+      `/api/recruitment/status/${data.transactionId}`
         const statusData = await statusRes.json();
 
         if (statusData.status === 'success') {
