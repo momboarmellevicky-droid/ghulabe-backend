@@ -124,13 +124,92 @@ const [recruitPhone, setRecruitPhone] = useState('');
     setRecruitStep(2);
   };
 
-  const handleStep2Pay = () => {
-    alert(lang === 'fr' 
-      ? "✅ Paiement de 5 000 FCFA confirmé via " + paymentMethod.toUpperCase() + ".\nAccès à l'Étape 3 (Smile Identity Liveness) débloqué."
-      : "✅ 5,000 FCFA payment confirmed.\nAccess to Step 3 unlocked."
-    );
-    setRecruitStep(3);
-  };
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+const handleStep2Pay = async () => {
+  if (!recruitPhone) {
+    alert(lang === 'fr'
+      ? "Veuillez saisir votre numéro Mobile Money."
+      : "Please enter your Mobile Money number.");
+    return;
+  }
+  if (paymentMethod !== 'airtel' && paymentMethod !== 'moov') {
+    alert(lang === 'fr'
+      ? "Ce mode de paiement n'est pas encore disponible. Choisissez Airtel Money ou Moov Money."
+      : "This payment method is not yet available. Choose Airtel Money or Moov Money.");
+    return;
+  }
+
+  setIsProcessingPayment(true);
+  try {
+    const res = await fetch('/api/recruitment/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: formData.email,
+        phoneNumber: recruitPhone,
+        operator: paymentMethod,
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      alert(lang === 'fr'
+        ? data.message_fr || "Le paiement a échoué. Veuillez réessayer."
+        : data.message_en || "Payment failed. Please try again.");
+      setIsProcessingPayment(false);
+      return;
+    }
+
+    if (data.status === 'success') {
+      alert(lang === 'fr' ? data.message_fr : data.message_en);
+      setIsProcessingPayment(false);
+      setRecruitStep(3);
+      return;
+    }
+
+    if (!data.transactionId) {
+      alert(lang === 'fr'
+        ? "Paiement initié mais impossible de suivre son statut. Contactez le support."
+        : "Payment initiated but status cannot be tracked. Contact support.");
+      setIsProcessingPayment(false);
+      return;
+    }
+
+    let attempts = 0;
+    const maxAttempts = 15;
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const statusRes = await fetch(`/api/recruitment/status/${data.transactionId}`);
+        const statusData = await statusRes.json();
+
+        if (statusData.status === 'success') {
+          clearInterval(poll);
+          alert(lang === 'fr' ? statusData.message_fr : statusData.message_en);
+          setIsProcessingPayment(false);
+          setRecruitStep(3);
+        } else if (statusData.status === 'failed' || attempts >= maxAttempts) {
+          clearInterval(poll);
+          setIsProcessingPayment(false);
+          alert(lang === 'fr'
+            ? "Le paiement n'a pas été confirmé à temps. Vérifiez votre téléphone et réessayez."
+            : "Payment was not confirmed in time. Check your phone and try again.");
+        }
+      } catch {
+        if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          setIsProcessingPayment(false);
+        }
+      }
+    }, 4000);
+  } catch (err) {
+    alert(lang === 'fr'
+      ? "Erreur réseau lors du paiement. Réessayez."
+      : "Network error during payment. Please retry.");
+    setIsProcessingPayment(false);
+  }
+};
 
   const handleStartSmileVerification = () => {
     if (!uploadedDoc || !livenessActionDone) {
