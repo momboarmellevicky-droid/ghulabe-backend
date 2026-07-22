@@ -136,7 +136,7 @@ export async function initiateMobileMoneyPayment(params: InitiatePaymentParams):
       userId,
       ipAddress: ip,
       status: 'SUCCESS',
-      details: `Paiement ${operator.toUpperCase()} en statut "${status}" (transactionId: ${transactionId}).`,
+      details: `Paiement ${operator.toUpperCase()} en statut "${status}" (transactionId: ${transactionId}). RAW: ${JSON.stringify(data)}`,
     });
 
     return {
