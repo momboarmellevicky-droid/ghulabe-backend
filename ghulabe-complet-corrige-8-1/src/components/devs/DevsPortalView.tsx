@@ -644,6 +644,17 @@ const [recruitPhone, setRecruitPhone] = useState('');
                 </div>
               </div>
               <div className="space-y-4 text-left">
+                <div className="space-y-1.5">
+  <label className="font-mono text-gray-300 text-xs">Numéro Mobile Money (Airtel/Moov) *</label>
+  <input
+    type="tel"
+    value={recruitPhone}
+    onChange={e => setRecruitPhone(e.target.value)}
+    placeholder="ex: 077123456"
+    className="w-full p-3.5 rounded-xl bg-[#0A0A0F] border border-[#FFB800]/50 text-white font-mono text-sm focus:outline-none focus:border-[#FFB800]"
+    required
+  />
+</div>
                 <p className="text-xs font-mono text-gray-300 font-bold">Choisissez votre méthode de paiement mobile money ou carte :</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
                   <button
@@ -669,15 +680,13 @@ const [recruitPhone, setRecruitPhone] = useState('');
                   </button>
 
                   <button
-                    type="button"
-                    onClick={() => setPaymentMethod('card')}
-                    className={`p-4 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-                      paymentMethod === 'card' ? 'bg-[#0066FF]/20 border-[#0066FF] text-white font-bold shadow-[0_0_15px_rgba(0,102,255,0.4)]' : 'bg-[#0D1B2A] border-white/10 text-gray-400'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5">💳 Carte Bancaire</span>
-                    {paymentMethod === 'card' && <CheckCircle2 className="w-4 h-4 text-[#0066FF]" />}
-                  </button>
+                type="button"
+                disabled
+                className="p-4 rounded-2xl border flex items-center justify-between cursor-not-allowed opacity-50 border-white/10 text-gray-500"
+              >
+                <span className="flex items-center gap-1.5">💳 Carte Bancaire</span>
+                <span className="text-[10px] font-mono uppercase">Bientôt disponible</span>
+              </button>
                 </div>
               </div>
 
