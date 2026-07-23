@@ -181,7 +181,7 @@ const handleStep2Pay = async () => {
     const poll = setInterval(async () => {
       attempts++;
       try {
-      `/api/recruitment/status/${data.transactionId}`
+      const statusRes = await fetch(`${API_BASE_URL}/recruitment/status/${data.transactionId}`);
         const statusData = await statusRes.json();
 
         if (statusData.status === 'success') {
