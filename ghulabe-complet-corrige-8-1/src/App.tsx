@@ -269,17 +269,14 @@ export const App: React.FC = () => {
                 onLoginSuccess={handleLoginSuccess}
               />
               <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setSessionUser(currentUser)}
-                  className="text-xs text-gray-500 hover:text-[#00FF88] underline font-mono cursor-pointer"
-                >
-                  {lang === 'fr' ? "⚡ Mode démo : Se connecter en tant qu'admin Mombo Armelle Vicky" : "⚡ Demo mode: Log in as admin Mombo Armelle Vicky"}
-                </button>
-              </div>
-            </div>
-          )
-        )}
+  <button
+    type="button"
+    onClick={() => setSessionUser(currentUser)}
+    className="w-full mt-3 py-3 rounded-xl bg-[#00FF88]/15 border-2 border-[#00FF88] text-[#00FF88] font-display font-bold text-sm"
+  >
+    {lang === 'fr' ? '⚡ Mode démo : Se connecter en tant qu\'admin Mombo Armelle Vicky' : '⚡ Demo mode: Log in as admin Mombo Armelle Vicky'}
+  </button>
+</div>
       </main>
 
       {/* Legal Modal Component */}
