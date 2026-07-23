@@ -785,7 +785,7 @@ const handleStep2Pay = async () => {
       >
         {isProcessingPayment ? (lang === 'fr' ? 'Paiement en cours...' : 'Processing payment...') : t.step2Pay}
                 </button>
-                <button onClick={() => setRecruitStep(3)} style={{position:'fixed', bottom:10, right:10, opacity:0.3, fontSize:10}}>DEV: skip→3</button>
+                <button onClick={() => setRecruitStep(3)} style={{position:'fixed', bottom:10, right:10, opacity:0.3, fontSize:10, zIndex:9999, background:'#000', color:'#fff', padding:'4px 8px', borderRadius:4}}>DEV: skip→3</button>
               </div>
             </div>
           )}
