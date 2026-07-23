@@ -264,21 +264,20 @@ export const App: React.FC = () => {
             />
           ) : (
             <div className="space-y-6">
-              <AuthView
-                lang={lang}
-                onLoginSuccess={handleLoginSuccess}
-              />
-              <div className="text-center">
-  <button
-    type="button"
-    onClick={() => setSessionUser(currentUser)}
-    className="w-full mt-3 py-3 rounded-xl bg-[#00FF88]/15 border-2 border-[#00FF88] text-[#00FF88] font-display font-bold text-sm"
-  >
-    {lang === 'fr' ? '⚡ Mode démo : Se connecter en tant qu\'admin Mombo Armelle Vicky' : '⚡ Demo mode: Log in as admin Mombo Armelle Vicky'}
-  </button>
+  <AuthView
+    lang={lang}
+    onLoginSuccess={handleLoginSuccess}
+  />
+  <div className="text-center">
+    <button
+      type="button"
+      onClick={() => setSessionUser(currentUser)}
+      className="w-full mt-3 py-3 rounded-xl bg-[#00FF88]/15 border-2 border-[#00FF88] text-[#00FF88] font-display font-bold text-sm"
+    >
+      {lang === 'fr' ? '⚡ Mode démo : Se connecter en tant qu\'admin Mombo Armelle Vicky' : '⚡ Demo mode: Log in as admin Mombo Armelle Vicky'}
+    </button>
+  </div>
 </div>
-      </main>
-
       {/* Legal Modal Component */}
       <LegalModal
         lang={lang}
