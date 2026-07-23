@@ -281,6 +281,7 @@ export const App: React.FC = () => {
 )
 )}
 {/* Legal Modal Component */}
+        <LegalModal
         lang={lang}
         page={legalPage}
         onClose={() => setLegalPage(null)}
