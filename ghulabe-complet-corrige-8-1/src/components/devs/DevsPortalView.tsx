@@ -177,7 +177,7 @@ const handleStep2Pay = async () => {
     }
 
     let attempts = 0;
-    const maxAttempts = 15;
+    const maxAttempts = 40;
     const poll = setInterval(async () => {
       attempts++;
       try {
@@ -202,7 +202,7 @@ const handleStep2Pay = async () => {
           setIsProcessingPayment(false);
         }
       }
-    }, 4000);
+  }, 5000);
   } catch (err) {
     alert(lang === 'fr'
       ? "Erreur réseau lors du paiement. Réessayez."
