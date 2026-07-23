@@ -174,6 +174,7 @@ export const App: React.FC = () => {
     if (sessionUser) setSessionUser({ ...sessionUser, plan: confirmedPlan });
     setPendingPlan(null);
   };
+
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[#0A0A0F] text-gray-100 selection:bg-[#0066ff]">
 
@@ -263,59 +264,61 @@ export const App: React.FC = () => {
               onOpenLegal={(page) => setLegalPage(page)}
             />
           ) : (
-  <div className="space-y-6">
-    <AuthView
-      lang={lang}
-      onLoginSuccess={handleLoginSuccess}
-    />
-    <div className="text-center">
-      <button
-        type="button"
-        onClick={() => setSessionUser(currentUser)}
-        className="w-full mt-3 py-3 rounded-xl bg-[#00FF88]/15 border-2 border-[#00FF88] text-[#00FF88] font-display font-bold text-sm"
-      >
-        {lang === 'fr' ? '⚡ Mode démo : Se connecter en tant qu\'admin Mombo Armelle Vicky' : '⚡ Demo mode: Log in as admin Mombo Armelle Vicky'}
-      </button>
-    </div>
-  </div>
-)
-)}
-{/* Legal Modal Component */}
-        
+            <div className="space-y-6">
+              <AuthView
+                lang={lang}
+                onLoginSuccess={handleLoginSuccess}
+              />
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setSessionUser(currentUser)}
+                  className="w-full mt-3 py-3 rounded-xl bg-[#00FF88]/15 border-2 border-[#00FF88] text-[#00FF88] font-display font-bold text-sm"
+                >
+                  {lang === 'fr' ? '⚡ Mode démo : Se connecter en tant qu\'admin Mombo Armelle Vicky' : '⚡ Demo mode: Log in as admin Mombo Armelle Vicky'}
+                </button>
+              </div>
+            </div>
+          )
+        )}
+
+        {/* Legal Modal Component */}
         <LegalModal
-        lang={lang}
-        page={legalPage}
-        onClose={() => setLegalPage(null)}
-      />
-
-      {pendingPlan && accessToken && (
-        <PaymentModal
           lang={lang}
-          targetPlan={pendingPlan}
-          accessToken={accessToken}
-          onClose={() => setPendingPlan(null)}
-          onSuccess={handlePaymentSuccess}
+          page={legalPage}
+          onClose={() => setLegalPage(null)}
         />
-      )}
 
-      {/* Footer on all pages (Exclusif) */}
-      <Footer
-        lang={lang}
-        onOpenLegal={(page) => setLegalPage(page)}
-      />
+        {pendingPlan && accessToken && (
+          <PaymentModal
+            lang={lang}
+            targetPlan={pendingPlan}
+            accessToken={accessToken}
+            onClose={() => setPendingPlan(null)}
+            onSuccess={handlePaymentSuccess}
+          />
+        )}
 
-      {/* Bottom Navigation on mobile devices */}
-      <BottomNav
-        activeTab={activeTab}
-        setActiveTab={(tab) => {
-          setIsScanAutoStarted(false);
-          setActiveTab(tab);
-        }}
-        lang={lang}
-      />
+        {/* Footer on all pages (Exclusif) */}
+        <Footer
+          lang={lang}
+          onOpenLegal={(page) => setLegalPage(page)}
+        />
 
+        {/* Bottom Navigation on mobile devices */}
+        <BottomNav
+          activeTab={activeTab}
+          setActiveTab={(tab) => {
+            setIsScanAutoStarted(false);
+            setActiveTab(tab);
+          }}
+          lang={lang}
+        />
+
+      </main>
     </div>
   );
 };
 
 export default App;
+      
