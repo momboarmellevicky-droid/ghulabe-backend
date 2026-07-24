@@ -81,6 +81,10 @@ export const MeView: React.FC<MeViewProps> = ({
 
   const handleAdminAuth = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!accessToken) {
+      alert("Session invalide. Reconnectez-vous avec un compte réel avant d'accéder au panneau admin.");
+      return;
+    }
     if (twoFaCode === '2026' || twoFaCode === '123456' || twoFaCode.length >= 4) {
       setTwoFaVerified(true);
       setIsAdminMode(true);
