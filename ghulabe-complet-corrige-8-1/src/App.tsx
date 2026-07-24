@@ -24,17 +24,16 @@ export const App: React.FC = () => {
     try { return localStorage.getItem('ghulabe_access_token'); } catch { return null; }
   });
 
-  // Active user mock state (Mombo Armelle Vicky / SME Client)
   const [currentUser, setCurrentUser] = useState<User>({
-    id: 'usr-pme-master',
-    email: 'direction@africacyber-pme.ga',
-    name: 'Mombo Armelle Vicky',
-    country: 'Gabon',
-    role: 'admin',
-    plan: 'gardien',
-    created_at: '2026-01-01T00:00:00.000Z',
-    is2FAEnabled: true
-  });
+  id: 'usr-demo-admin',
+  email: 'demo@ghulabe.com',
+  name: 'Admin Démo',
+  country: 'Gabon',
+  role: 'admin',
+  plan: 'gardien',
+  created_at: '2026-01-01T00:00:00.000Z',
+  is2FAEnabled: true
+});
 
   // Monitored domains state
   const [domains, setDomains] = useState<Domain[]>([
