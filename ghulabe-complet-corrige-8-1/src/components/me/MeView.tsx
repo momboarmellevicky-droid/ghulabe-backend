@@ -182,7 +182,7 @@ export const MeView: React.FC<MeViewProps> = ({
               Authentification 2FA Obligatoire
             </h2>
             <p className="text-xs text-gray-300 mt-1 font-mono">
-              Accès strictement réservé à <strong>Mombo Armelle Vicky</strong> (ghulabe.com/admin)
+              Accès strictement réservé à <strong>l'administrateur</strong> (ghulabe.com/admin)
             </p>
           </div>
 
