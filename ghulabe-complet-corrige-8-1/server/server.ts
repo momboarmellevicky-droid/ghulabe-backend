@@ -7,6 +7,7 @@ import certificationRoutes from './routes/certificationRoutes';
 import monitoringRoutes from './routes/monitoringRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import recruitmentRoutes from './routes/recruitmentRoutes';
+import adminRoutes from './routes/adminRoutes';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { testDbConnection } from './config/supabase';
 import { generateAuditLog } from './utils/crypto';
@@ -58,6 +59,7 @@ app.use('/api/cron', monitoringRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/public/certification', certificationRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 
 // Endpoint de santé & statut système
