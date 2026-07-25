@@ -178,4 +178,19 @@ export const GhulabeBackend = {
       return [];
     }
   },
+  async updateAppStatus(id: string, status: 'approved' | 'rejected', token: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/pending-apps/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || 'Erreur lors de la mise à jour du statut.');
+    }
+    return data.application;
+  },
 };
