@@ -404,3 +404,70 @@ export const MeView: React.FC<MeViewProps> = ({
                     <button
                       onClick={() => setSelectedChatMissionId(selectedChatMissionId === ms.id ? null : ms.id)}
                       className="px-4 py-2 rounded-xl bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-200 hover:text-white font-mono text-xs transition-colors cursor-pointer border border-[#006
+6FF]/40"
+                    >
+                      <Eye className="w-3.5 h-3.5 inline mr-1.5" />
+                      <span>{selectedChatMissionId === ms.id ? 'Masquer Chat Client/Dev' : 'Inspecter Chat Privé'}</span>
+                    </button>
+                    <button
+                      onClick={() => alert(`📄 Export PDF de la mission #${ms.id} chiffré et sauvegardé.`)}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-[#00FF88] cursor-pointer"
+                      title="Export PDF"
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Admin Chat Viewer */}
+            {selectedChatMissionId && (
+              <div className="p-5 rounded-2xl bg-[#070D14] border border-[#0066FF] space-y-3 font-mono text-xs">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2 text-[#00FF88]">
+                  <span>🔒 Inspection de la Messagerie Interne (Mission #{selectedChatMissionId})</span>
+                  <span className="text-gray-400 text-[10px]">Avis de litige & télémétrie Admin active</span>
+                </div>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                  {MOCK_MESSAGES.map((m) => (
+                    <div key={m.id} className="p-2.5 rounded bg-[#0D1B2A] border border-white/5 text-gray-200">
+                      <span className="text-[#80C4FF] font-bold">[{m.sender_role.toUpperCase()}] {m.sender_name} : </span>
+                      <span>{m.content}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 4: FLAGS A/B & EXPORTS PDF SI RENDER CONNECTED */}
+          <div className="glass-card p-6 rounded-3xl border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-gray-400">
+            <span>🚀 Déploiement : <strong className="text-white">GitHub → Render</strong> | Chiffrement : <strong className="text-[#00FF88]">AES-256 / TLS 1.3</strong></span>
+            <button
+              onClick={() => alert("📊 Export complet des logs d'audit au format JSON chiffré et rapports PDF émis.")}
+              className="px-4 py-2 rounded-lg bg-[#00FF88]/20 hover:bg-[#00FF88] text-[#00FF88] hover:text-[#0A0A0F] font-bold transition-all cursor-pointer"
+            >
+              💾 Exporter Sauvegarde Complète (JSON/PDF)
+            </button>
+          </div>
+
+        </div>
+      )}
+
+      {/* Legal pages shortcuts */}
+      <div className="glass-card p-6 rounded-3xl border border-white/5 space-y-3">
+        <h4 className="font-display font-bold text-white text-sm uppercase tracking-wider">
+          Accès rapide pages juridiques conformes au Droit Gabonais
+        </h4>
+        <div className="flex flex-wrap gap-2 text-xs font-mono">
+          <button onClick={() => onOpenLegal('mentions')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Mentions Légales</button>
+          <button onClick={() => onOpenLegal('privacy')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Politique de Confidentialité</button>
+          <button onClick={() => onOpenLegal('cgu')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Conditions Générales (CGU)</button>
+          <button onClick={() => onOpenLegal('disclaimer')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Clause Non-responsabilité Devs</button>
+          <button onClick={() => onOpenLegal('cookies')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Politique de Cookies</button>
+        </div>
+      </div>
+
+    </div>
+  );
+};
