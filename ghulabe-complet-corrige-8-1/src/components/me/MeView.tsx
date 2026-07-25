@@ -47,7 +47,7 @@ export const MeView: React.FC<MeViewProps> = ({
     return () => { cancelled = true; };
   }, [isAdminMode, accessToken]);
 
-  // const [pendingApps, setPendingApps] = useState<any[]>([]);
+  const [pendingApps, setPendingApps] = useState<any[]>([]);
 
     useEffect(() => {
       if (!isAdminMode) return;
