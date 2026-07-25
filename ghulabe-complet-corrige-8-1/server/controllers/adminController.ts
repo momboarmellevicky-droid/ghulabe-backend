@@ -38,3 +38,50 @@ export async function updateAppStatus(req: Request, res: Response): Promise<void
 
   res.status(200).json({ application: data });
 }
+import { sendOtpEmail } from '../services/emailService';
+
+const pendingAdminOtps = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
+
+export async function requestAdminOtp(req: Request, res: Response): Promise<void> {
+  const userEmail = (req as any).user?.email;
+  if (!userEmail) {
+    res.status(401).json({ error_fr: "Session invalide." });
+    return;
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  pendingAdminOtps.set(userEmail, { otp, expiresAt: Date.now() + 5 * 60 * 1000, attempts: 0 });
+
+  const sent = await sendOtpEmail(userEmail, otp, 'fr', userEmail, req.ip || 'unknown-ip');
+
+  res.status(200).json({
+    message_fr: sent
+      ? "Code envoyé par email. Vérifiez votre boîte de réception."
+      : "Code généré (email non envoyé, environnement de test).",
+    emailSent: sent,
+  });
+}
+
+export async function verifyAdminOtp(req: Request, res: Response): Promise<void> {
+  const userEmail = (req as any).user?.email;
+  const { otp } = req.body;
+
+  const challenge = pendingAdminOtps.get(userEmail);
+  if (!challenge || Date.now() > challenge.expiresAt) {
+    res.status(401).json({ error_fr: "Code expiré. Redemandez un nouveau code." });
+    return;
+  }
+  if (challenge.attempts >= 5) {
+    pendingAdminOtps.delete(userEmail);
+    res.status(429).json({ error_fr: "Trop de tentatives. Redemandez un nouveau code." });
+    return;
+  }
+  if (challenge.otp !== otp) {
+    challenge.attempts += 1;
+    res.status(401).json({ error_fr: "Code incorrect." });
+    return;
+  }
+
+  pendingAdminOtps.delete(userEmail);
+  res.status(200).json({ verified: true });
+}
