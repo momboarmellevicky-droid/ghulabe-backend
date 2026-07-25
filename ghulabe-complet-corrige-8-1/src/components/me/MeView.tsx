@@ -3,7 +3,7 @@ import { Language, User } from '../../types';
 import { getT } from '../../data/i18n';
 import { MOCK_DEVELOPERS, MOCK_MISSIONS, MOCK_MESSAGES } from '../../data/mockData';
 import { GhulabeBackend } from '../../services/apiClient';
-import { 
+import {
   FileText, DollarSign, Key, UserX, UserCheck, Eye
 } from 'lucide-react';
 
@@ -29,7 +29,10 @@ export const MeView: React.FC<MeViewProps> = ({
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaVerified, setTwoFaVerified] = useState(false);
-  
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState('');
+
   // Admin state
   const [devList, setDevList] = useState(MOCK_DEVELOPERS);
   const [missionList, setMissionList] = useState(MOCK_MISSIONS);
@@ -49,54 +52,75 @@ export const MeView: React.FC<MeViewProps> = ({
 
   const [pendingApps, setPendingApps] = useState<any[]>([]);
 
-    useEffect(() => {
-      if (!isAdminMode) return;
-      let cancelled = false;
-      GhulabeBackend.getPendingApps(accessToken).then((apps) => {
-        if (!cancelled) setPendingApps(apps);
-      });
-      return () => { cancelled = true; };
-    }, [isAdminMode, accessToken]);
+  useEffect(() => {
+    if (!isAdminMode) return;
+    let cancelled = false;
+    GhulabeBackend.getPendingApps(accessToken).then((apps) => {
+      if (!cancelled) setPendingApps(apps);
+    });
+    return () => { cancelled = true; };
+  }, [isAdminMode, accessToken]);
 
   // Calculate total FCFA commissions (15% on all missions)
   const totalGrossFcfa = missionList.reduce((acc, m) => acc + m.budget_fcfa, 0);
   const totalCommissionGhulabeFcfa = Math.round(totalGrossFcfa * 0.15);
 
-  const handleAdminAuth = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRequestOtp = async () => {
     if (!accessToken) {
       alert("Session invalide. Reconnectez-vous avec un compte réel avant d'accéder au panneau admin.");
       return;
     }
-    if (twoFaCode === '2026' || twoFaCode === '123456') {
-      setTwoFaVerified(true);
-      setIsAdminMode(true);
-    } else {
-      alert("Code 2FA invalide. Accès refusé par le pare-feu GHULABE.");
+    setOtpLoading(true);
+    setOtpError('');
+    try {
+      await GhulabeBackend.requestAdminOtp(accessToken);
+      setOtpSent(true);
+    } catch (err: any) {
+      setOtpError(err.message || "Erreur lors de l'envoi du code.");
     }
+    setOtpLoading(false);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessToken) return;
+    setOtpLoading(true);
+    setOtpError('');
+    try {
+      const res = await GhulabeBackend.verifyAdminOtp(twoFaCode, accessToken);
+      if (res.verified) {
+        setTwoFaVerified(true);
+        setIsAdminMode(true);
+      } else {
+        setOtpError("Code 2FA invalide.");
+      }
+    } catch (err: any) {
+      setOtpError(err.message || "Code incorrect.");
+    }
+    setOtpLoading(false);
   };
 
   const handleApproveApp = async (id: string, name: string) => {
-      if (!accessToken) return;
-      try {
-        await GhulabeBackend.updateAppStatus(id, 'approved', accessToken);
-        setPendingApps(pendingApps.filter(a => a.id !== id));
-        alert(`✅ Candidat "${name}" approuvé ! Certificat GHULABE RECRUIT émis.`);
-      } catch (err: any) {
-        alert(`Erreur lors de l'approbation : ${err.message}`);
-      }
-    };
+    if (!accessToken) return;
+    try {
+      await GhulabeBackend.updateAppStatus(id, 'approved', accessToken);
+      setPendingApps(pendingApps.filter(a => a.id !== id));
+      alert(`✅ Candidat "${name}" approuvé ! Certificat GHULABE RECRUIT émis.`);
+    } catch (err: any) {
+      alert(`Erreur lors de l'approbation : ${err.message}`);
+    }
+  };
 
-    const handleRejectApp = async (id: string) => {
-      if (!accessToken) return;
-      try {
-        await GhulabeBackend.updateAppStatus(id, 'rejected', accessToken);
-        setPendingApps(pendingApps.filter(a => a.id !== id));
-        alert("❌ Candidature refusée. Email de notification transmis.");
-      } catch (err: any) {
-        alert(`Erreur lors du refus : ${err.message}`);
-      }
-    };
+  const handleRejectApp = async (id: string) => {
+    if (!accessToken) return;
+    try {
+      await GhulabeBackend.updateAppStatus(id, 'rejected', accessToken);
+      setPendingApps(pendingApps.filter(a => a.id !== id));
+      alert("❌ Candidature refusée. Email de notification transmis.");
+    } catch (err: any) {
+      alert(`Erreur lors du refus : ${err.message}`);
+    }
+  };
 
   const toggleSuspendDev = (id: string) => {
     setDevList(devList.map(d => {
@@ -111,7 +135,7 @@ export const MeView: React.FC<MeViewProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-12">
-      
+
       {/* Profile Overview Card */}
       <div className="glass-card p-4 sm:p-6 rounded-3xl border border-[#0066FF]/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -151,7 +175,7 @@ export const MeView: React.FC<MeViewProps> = ({
               onClick={() => setIsAdminMode(false)}
               className="px-4 py-3 rounded-xl bg-[#0D1B2A] hover:bg-white/10 text-gray-300 text-xs font-mono transition-colors cursor-pointer"
             >
-              ⬅ Quitter Panneau Admin
+              ← Quitter Panneau Admin
             </button>
           )}
 
@@ -181,34 +205,46 @@ export const MeView: React.FC<MeViewProps> = ({
             </p>
           </div>
 
-          <form onSubmit={handleAdminAuth} className="space-y-4">
-            <input
-              type="text"
-              value={twoFaCode}
-              onChange={(e) => setTwoFaCode(e.target.value)}
-              placeholder="Entrez code 2FA (ex: 2026)"
-              className="w-full text-center py-4 rounded-xl bg-[#0A0A0F] border border-[#FFB800] text-[#FFB800] font-mono text-xl tracking-widest font-black focus:outline-none focus:ring-1 focus:ring-[#FFB800]"
-              maxLength={6}
-              required
-              autoFocus
-            />
-            <button
-              type="submit"
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF8800] text-[#0A0A0F] font-display font-black text-sm uppercase tracking-wider transition-all shadow-lg cursor-pointer"
-            >
-              Débloquer Panneau Admin
-            </button>
-          </form>
-          <p className="text-[10px] text-gray-500 font-mono">
-            💡 Astuce démo : Tapez "2026" ou "123456" pour entrer immédiatement.
-          </p>
+          {!otpSent ? (
+            <div className="space-y-4">
+              <button
+                onClick={handleRequestOtp}
+                disabled={otpLoading}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF8800] text-[#0A0A0F] font-display font-black text-sm uppercase tracking-wider transition-all shadow-lg cursor-pointer disabled:opacity-50"
+              >
+                {otpLoading ? 'Envoi...' : 'Envoyer le code par email'}
+              </button>
+              {otpError && <p className="text-xs text-red-400">{otpError}</p>}
+            </div>
+          ) : (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <input
+                type="text"
+                value={twoFaCode}
+                onChange={(e) => setTwoFaCode(e.target.value)}
+                placeholder="Entrez le code reçu par email"
+                className="w-full text-center py-4 rounded-xl bg-[#0A0A0F] border border-[#FFB800] text-[#FFB800] font-mono text-xl tracking-widest font-black focus:outline-none focus:ring-1 focus:ring-[#FFB800]"
+                maxLength={6}
+                required
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={otpLoading}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF8800] text-[#0A0A0F] font-display font-black text-sm uppercase tracking-wider transition-all shadow-lg cursor-pointer disabled:opacity-50"
+              >
+                {otpLoading ? 'Vérification...' : 'Débloquer Panneau Admin'}
+              </button>
+              {otpError && <p className="text-xs text-red-400">{otpError}</p>}
+            </form>
+          )}
         </div>
       )}
 
       {/* ADMIN PANEL DASHBOARD (ghulabe.com/admin) */}
       {isAdminMode && twoFaVerified && (
         <div className="space-y-4 sm:space-y-6 animate-fade-in">
-          
+
           <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0D1B2A] via-[#0066FF]/20 to-[#0A0A0F] border-2 border-[#FFB800] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_35px_rgba(255,184,0,0.25)]">
             <div>
               <span className="px-2.5 py-0.5 rounded bg-[#FFB800]/20 text-[#FFB800] font-mono text-xs font-black uppercase">
@@ -258,7 +294,7 @@ export const MeView: React.FC<MeViewProps> = ({
                       </div>
                       <p className="text-xs font-mono text-gray-400">{app.email} • {app.city}, {app.country}</p>
                       <div className="p-2 rounded bg-[#0D1B2A] border border-[#00FF88]/30 font-mono text-[11px] text-[#00FF88]">
-                        🛡️ Biométrie Smile ID : {app.smile_identity}
+                        🛡️ Biométrie Smile ID : {app.smile_identity_status}
                       </div>
                       <div className="flex items-center justify-between font-mono text-xs">
                         <span className="text-gray-400">Score QCM : <strong className="text-[#00FF88]">{app.test_score}%</strong> (Seuil ≥ 70% OK)</span>
@@ -358,7 +394,7 @@ export const MeView: React.FC<MeViewProps> = ({
                       <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300 uppercase">{ms.status}</span>
                       <span className="text-[#FF2D2D] font-bold uppercase">Urgence: {ms.urgency}</span>
                     </div>
-                    <p className="text-sm font-bold text-white">{ms.url} — {ms.client_name} ➔ {ms.developer_name}</p>
+                    <p className="text-sm font-bold text-white">{ms.url} — {ms.client_name} → {ms.developer_name}</p>
                     <p className="text-xs font-mono text-gray-400">
                       Budget client : <strong className="text-white">{ms.budget_fcfa.toLocaleString()} FCFA</strong> • Commission 15% GHULABE : <strong className="text-[#00FF88]">{Math.round(ms.budget_fcfa * 0.15).toLocaleString()} FCFA net</strong>
                     </p>
@@ -367,70 +403,4 @@ export const MeView: React.FC<MeViewProps> = ({
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => setSelectedChatMissionId(selectedChatMissionId === ms.id ? null : ms.id)}
-                      className="px-4 py-2 rounded-xl bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-200 hover:text-white font-mono text-xs transition-colors cursor-pointer border border-[#0066FF]/40"
-                    >
-                      <Eye className="w-3.5 h-3.5 inline mr-1.5" />
-                      <span>{selectedChatMissionId === ms.id ? 'Masquer Chat Client/Dev' : 'Inspecter Chat Privé'}</span>
-                    </button>
-                    <button
-                      onClick={() => alert(`📄 Export PDF de la mission #${ms.id} chiffré et sauvegardé.`)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-[#00FF88] cursor-pointer"
-                      title="Export PDF"
-                    >
-                      <FileText className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Admin Chat Viewer */}
-            {selectedChatMissionId && (
-              <div className="p-5 rounded-2xl bg-[#070D14] border border-[#0066FF] space-y-3 font-mono text-xs">
-                <div className="flex items-center justify-between border-b border-white/10 pb-2 text-[#00FF88]">
-                  <span>🔒 Inspection de la Messagerie Interne (Mission #{selectedChatMissionId})</span>
-                  <span className="text-gray-400 text-[10px]">Avis de litige & télémétrie Admin active</span>
-                </div>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                  {MOCK_MESSAGES.map((m) => (
-                    <div key={m.id} className="p-2.5 rounded bg-[#0D1B2A] border border-white/5 text-gray-200">
-                      <span className="text-[#80C4FF] font-bold">[{m.sender_role.toUpperCase()}] {m.sender_name} : </span>
-                      <span>{m.content}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 4: FLAGS A/B & EXPORTS PDF SI RENDER CONNECTED */}
-          <div className="glass-card p-6 rounded-3xl border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-gray-400">
-            <span>🚀 Déploiement : <strong className="text-white">GitHub ➔ Render</strong> | Chiffrement : <strong className="text-[#00FF88]">AES-256 / TLS 1.3</strong></span>
-            <button
-              onClick={() => alert("📊 Export complet des logs d'audit au format JSON chiffré et rapports PDF émis.")}
-              className="px-4 py-2 rounded-lg bg-[#00FF88]/20 hover:bg-[#00FF88] text-[#00FF88] hover:text-[#0A0A0F] font-bold transition-all cursor-pointer"
-            >
-              📥 Exporter Sauvegarde Complète (JSON/PDF)
-            </button>
-          </div>
-
-        </div>
-      )}
-
-      {/* Legal pages shortcuts */}
-      <div className="glass-card p-6 rounded-3xl border border-white/5 space-y-3">
-        <h4 className="font-display font-bold text-white text-sm uppercase tracking-wider">
-          Accès rapide pages juridiques conformes au Droit Gabonais
-        </h4>
-        <div className="flex flex-wrap gap-2 text-xs font-mono">
-          <button onClick={() => onOpenLegal('mentions')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Mentions Légales</button>
-          <button onClick={() => onOpenLegal('privacy')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Politique de Confidentialité</button>
-          <button onClick={() => onOpenLegal('cgu')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Conditions Générales (CGU)</button>
-          <button onClick={() => onOpenLegal('disclaimer')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Clause Non-responsabilité Devs</button>
-          <button onClick={() => onOpenLegal('cookies')} className="px-3 py-1.5 rounded bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-300 hover:text-white transition-colors cursor-pointer">Politique de Cookies</button>
-        </div>
-      </div>
-
-    </div>
-  );
-};
+                      className="px-4 py-2 rounded-xl bg-[#0D1B2A] hover:bg-[#0066FF] text-gray-200 hover:text-white font-mono text-xs transition-colors cursor-pointer border border-[#006
