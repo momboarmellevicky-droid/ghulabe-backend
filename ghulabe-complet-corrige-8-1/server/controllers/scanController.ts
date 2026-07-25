@@ -113,9 +113,13 @@ export async function startScan(req: Request, res: Response): Promise<void> {
         // Recalculée à CHAQUE scan (jamais figée) : une régression fait perdre le badge.
         const criticalCount = findings.filter((f) => f.severity === 'critique').length;
         const isCertified = score >= 8 && criticalCount === 0;
+        const previouslyCertified = existingDomain ? (await supabaseAdmin
+          .from('domains').select('certified').eq('id', existingDomain.id).single()
+        ).data?.certified === true : false;
+        const complianceStatus = isCertified ? 'conforme' : score >= 5 ? 'en_cours' : 'non_conforme';
         const certificationFields = isCertified
-          ? { certified: true, certified_at: new Date().toISOString(), certification_score: score }
-          : { certified: false, certified_at: null, certification_score: score };
+          ? { certified: true, certified_at: new Date().toISOString(), certification_score: score, compliance_status: complianceStatus, was_certified_before: true }
+          : { certified: false, certified_at: null, certification_score: score, compliance_status: complianceStatus, was_certified_before: previouslyCertified };
 
         if (existingDomain) {
           domainId = existingDomain.id;
