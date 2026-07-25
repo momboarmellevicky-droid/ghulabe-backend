@@ -34,7 +34,7 @@ export const MeView: React.FC<MeViewProps> = ({
   const [otpError, setOtpError] = useState('');
 
   // Admin state
-  const [devList, setDevList] = useState(MOCK_DEVELOPERS);
+  const [devList, setDevList] = useState<any[]>([]);
   const [missionList, setMissionList] = useState(MOCK_MISSIONS);
   const [selectedChatMissionId, setSelectedChatMissionId] = useState<string | null>(null);
 
@@ -57,6 +57,20 @@ export const MeView: React.FC<MeViewProps> = ({
     let cancelled = false;
     GhulabeBackend.getPendingApps(accessToken).then((apps) => {
       if (!cancelled) setPendingApps(apps);
+    });
+    return () => { cancelled = true; };
+  }, [isAdminMode, accessToken]);
+  useEffect(() => {
+    if (!isAdminMode) return;
+    let cancelled = false;
+    GhulabeBackend.getDevList(accessToken).then((devs) => {
+      if (!cancelled) {
+        setDevList(devs.map((d: any) => ({
+          ...d,
+          speciality: (d.specialites && d.specialites[0]) || '',
+          status: d.is_suspended ? 'suspended' : 'active',
+        })));
+      }
     });
     return () => { cancelled = true; };
   }, [isAdminMode, accessToken]);
@@ -108,10 +122,13 @@ export const MeView: React.FC<MeViewProps> = ({
       alert(`✅ Candidat "${name}" approuvé ! Certificat GHULABE RECRUIT émis.`);
     } catch (err: any) {
       alert(`Erreur lors de l'approbation : ${err.message}`);
-    }
-  };
+      }
+    };
 
-  const handleRejectApp = async (id: string) => {
+    
+
+    const handleRejectApp = async (id: string) => {
+  
     if (!accessToken) return;
     try {
       await GhulabeBackend.updateAppStatus(id, 'rejected', accessToken);
@@ -122,16 +139,20 @@ export const MeView: React.FC<MeViewProps> = ({
     }
   };
 
-  const toggleSuspendDev = (id: string) => {
-    setDevList(devList.map(d => {
-      if (d.id === id) {
-        const newStatus = d.status === 'active' ? 'suspended' : 'active';
-        alert(`Statut du développeur "${d.name}" modifié en : ${newStatus.toUpperCase()}`);
-        return { ...d, status: newStatus };
-      }
-      return d;
-    }));
+  const toggleSuspendDev = async (id: string) => {
+    if (!accessToken) return;
+    const dev = devList.find(d => d.id === id);
+    if (!dev) return;
+    const suspend = dev.status === 'active';
+    try {
+      await GhulabeBackend.toggleSuspendDev(id, suspend, accessToken);
+      setDevList(devList.map(d => d.id === id ? { ...d, status: suspend ? 'suspended' : 'active' } : d));
+      alert(`Statut du développeur "${dev.name}" modifié en : ${(suspend ? 'suspended' : 'active').toUpperCase()}`);
+    } catch (err: any) {
+      alert(`Erreur lors de la mise à jour du statut : ${err.message}`);
+    }
   };
+        
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-12">
