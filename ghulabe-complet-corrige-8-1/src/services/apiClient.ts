@@ -156,4 +156,26 @@ export const GhulabeBackend = {
     }
     return data;
   },
+
+  async getPendingApps(token?: string): Promise<any[]> {
+    if (!token) {
+      console.warn('[GHULABE Backend Wrapper] getPendingApps: aucun token de session disponible.');
+      return [];
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/pending-apps`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        console.warn('[GHULABE Backend Wrapper] getPendingApps: erreur serveur, repli sur liste vide.');
+        return [];
+      }
+      const data = await res.json();
+      return data.applications || [];
+    } catch (err: any) {
+      console.warn('[GHULABE Backend Wrapper] getPendingApps fallback local:', err.message);
+      return [];
+    }
+  },
 };
