@@ -47,33 +47,16 @@ export const MeView: React.FC<MeViewProps> = ({
     return () => { cancelled = true; };
   }, [isAdminMode, accessToken]);
 
-  // Mock pending dev applications
-  const [pendingApps, setPendingApps] = useState([
-    {
-      id: 'app-99',
-      name: 'Amadou Koné',
-      email: 'a.kone@devsec-abidjan.ci',
-      country: 'Côte d\'Ivoire',
-      city: 'Abidjan',
-      speciality: 'AppSec',
-      smile_identity: 'VERIFIED (30s auto check OK)',
-      test_score: 84,
-      status: 'pending',
-      rate_fcfa: 35000
-    },
-    {
-      id: 'app-100',
-      name: 'Salif Traoré',
-      email: 's.traore@pentest-mali.ml',
-      country: 'Mali',
-      city: 'Bamako',
-      speciality: 'Pentest',
-      smile_identity: 'VERIFIED (Selfie Liveness Blink OK)',
-      test_score: 72,
-      status: 'pending',
-      rate_fcfa: 30000
-    }
-  ]);
+  // const [pendingApps, setPendingApps] = useState<any[]>([]);
+
+    useEffect(() => {
+      if (!isAdminMode) return;
+      let cancelled = false;
+      GhulabeBackend.getPendingApps(accessToken).then((apps) => {
+        if (!cancelled) setPendingApps(apps);
+      });
+      return () => { cancelled = true; };
+    }, [isAdminMode, accessToken]);
 
   // Calculate total FCFA commissions (15% on all missions)
   const totalGrossFcfa = missionList.reduce((acc, m) => acc + m.budget_fcfa, 0);
