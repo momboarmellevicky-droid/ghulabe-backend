@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase';
+import { supabaseAdmin } from '../config/supabase';
 
 export async function getPendingApps(req: Request, res: Response): Promise<void> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('dev_applications')
     .select('id, name, email, country, city, speciality, languages, rate_fcfa, experience, portfolio, bio, smile_identity_status, created_at')
     .eq('smile_identity_status', 'pending')
