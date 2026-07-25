@@ -192,5 +192,32 @@ export const GhulabeBackend = {
       throw new Error(data.error_fr || 'Erreur lors de la mise à jour du statut.');
     }
     return data.application;
-  },
+  }, 
+  async requestAdminOtp(token: string): Promise<{ message_fr: string; emailSent: boolean }> {
+      const res = await fetch(`${API_BASE_URL}/admin/request-otp`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error_fr || 'Erreur lors de la demande de code.');
+      }
+      return data;
+    },
+
+    async verifyAdminOtp(otp: string, token: string): Promise<{ verified: boolean }> {
+      const res = await fetch(`${API_BASE_URL}/admin/verify-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ otp }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error_fr || 'Code incorrect.');
+      }
+      return data;
+    },
 };
