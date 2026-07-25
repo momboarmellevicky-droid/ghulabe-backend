@@ -220,4 +220,41 @@ export const GhulabeBackend = {
       }
       return data;
     },
+  async getDevList(token?: string): Promise<any[]> {
+    if (!token) {
+      console.warn('[GHULABE Backend Wrapper] getDevList: aucun token de session disponible.');
+      return [];
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/dev-list`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        console.warn('[GHULABE Backend Wrapper] getDevList: erreur serveur, repli sur liste vide.');
+        return [];
+      }
+      const data = await res.json();
+      return data.developers || [];
+    } catch (err: any) {
+      console.warn('[GHULABE Backend Wrapper] getDevList fallback local:', err.message);
+      return [];
+    }
+  },
+
+  async toggleSuspendDev(id: string, suspend: boolean, token: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/admin/dev-list/${id}/suspend`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ suspend }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || 'Erreur lors de la mise à jour du statut.');
+    }
+    return data.developer;
+  },
 };
