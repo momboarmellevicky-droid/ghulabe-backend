@@ -37,7 +37,7 @@ export async function runWeeklyMonitoring(req: Request, res: Response): Promise<
     // 1. Récupère tous les domaines des utilisateurs abonnés au plan Gardien.
     const { data: gardienDomains, error: fetchError } = await supabaseAdmin
       .from('domains')
-      .select('id, url, user_id, users!inner(id, email, phone, name, plan)')
+      .select('id, url, user_id, certified, users!inner(id, email, phone, name, plan)')
       .eq('users.plan', 'gardien');
 
     if (fetchError) throw fetchError;
@@ -62,16 +62,19 @@ export async function runWeeklyMonitoring(req: Request, res: Response): Promise<
         const criticalCount = findings.filter((f) => f.severity === 'critique').length;
         const isCertified = score >= 8 && criticalCount === 0;
 
-        await supabaseAdmin
-          .from('domains')
-          .update({
-            score,
-            status: domainStatus,
-            last_scan: new Date().toISOString(),
-            certified: isCertified,
-            certified_at: isCertified ? new Date().toISOString() : null,
-            certification_score: score,
-          })
+      
+        .from('domains')
+        .update({
+          score,
+          status: domainStatus,
+          last_scan: new Date().toISOString(),
+          certified: isCertified,
+          certified_at: isCertified ? new Date().toISOString() : null,
+          certification_score: score,
+          compliance_status: isCertified ? 'conforme' : score >= 5 ? 'en_cours' : 'non_conforme',
+          was_certified_before: isCertified || domain.certified === true,
+        })
+        
           .eq('id', domain.id);
 
         await supabaseAdmin.from('scans').insert({ domain_id: domain.id, score, findings });
