@@ -14,7 +14,7 @@ export async function getPublicCertification(req: Request, res: Response): Promi
   try {
     const { data: domain, error } = await supabaseAdmin
       .from('domains')
-      .select('url, certified, certified_at, certification_score')
+      .select('url, certified, certified_at, certification_score, compliance_status')
       .eq('id', domainId)
       .maybeSingle();
 
@@ -27,7 +27,7 @@ export async function getPublicCertification(req: Request, res: Response): Promi
       url: domain.url,
       certified: domain.certified === true,
       certified_at: domain.certified_at,
-      certification_score: domain.certification_score,
+      compliance_status: domain.compliance_status,
       verified_by: 'GHULABE',
     });
   } catch (err: any) {
@@ -47,16 +47,17 @@ export async function getCertificationBadgeSvg(req: Request, res: Response): Pro
 
   const { data: domain } = await supabaseAdmin
     .from('domains')
-    .select('certified, certification_score')
+    .select('certified, certification_score, compliance_status')
     .eq('id', domainId)
     .maybeSingle();
 
   const certified = domain?.certified === true;
   const score = domain?.certification_score ?? '—';
 
-  const bgColor = certified ? '#00FF88' : '#666666';
-  const label = certified ? 'ENTREPRISE AUDITÉE GHULABE' : 'NON CERTIFIÉ';
-  const scoreText = certified ? `Score ${score}/10` : '';
+  const complianceStatus = domain?.compliance_status || 'non_conforme';
+    const bgColor = complianceStatus === 'conforme' ? '#00FF88' : complianceStatus === 'en_cours' ? '#FFB800' : '#FF2D2D';
+    const label = complianceStatus === 'conforme' ? 'CONFORME GHULABE' : complianceStatus === 'en_cours' ? 'EN COURS DE MISE EN CONFORMITÉ' : 'NON CONFORME';
+    const scoreText = certified ? `Score ${score}/10` : score !== '—' ? `Score ${score}/10` : '';
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="260" height="60" viewBox="0 0 260 60">
   <rect width="260" height="60" rx="10" fill="#0A0A0F" stroke="${bgColor}" stroke-width="2"/>
