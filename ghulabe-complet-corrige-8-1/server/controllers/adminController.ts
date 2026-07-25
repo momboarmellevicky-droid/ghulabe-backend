@@ -85,3 +85,36 @@ export async function verifyAdminOtp(req: Request, res: Response): Promise<void>
   pendingAdminOtps.delete(userEmail);
   res.status(200).json({ verified: true });
 }
+export async function getDevList(req: Request, res: Response): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('id, name, email, country, city, rate_fcfa, portfolio_url, badge_level, rating, missions_completed, specialites, is_suspended, created_at')
+    .eq('role', 'developer')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    res.status(500).json({ error_fr: "Erreur lors de la récupération des développeurs.", details: error.message });
+    return;
+  }
+
+  res.status(200).json({ developers: data });
+}
+
+export async function toggleSuspendDev(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+  const { suspend } = req.body;
+
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .update({ is_suspended: suspend })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ error_fr: "Erreur lors de la mise à jour du statut.", details: error.message });
+    return;
+  }
+
+  res.status(200).json({ developer: data });
+}
