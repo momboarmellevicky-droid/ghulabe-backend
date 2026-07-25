@@ -76,15 +76,27 @@ export const MeView: React.FC<MeViewProps> = ({
     }
   };
 
-  const handleApproveApp = (id: string, name: string) => {
-    setPendingApps(pendingApps.filter(a => a.id !== id));
-    alert(`✅ Candidat "${name}" approuvé ! Certificat GHULABE RECRUIT émis.`);
-  };
+  conconst handleApproveApp = async (id: string, name: string) => {
+      if (!accessToken) return;
+      try {
+        await GhulabeBackend.updateAppStatus(id, 'approved', accessToken);
+        setPendingApps(pendingApps.filter(a => a.id !== id));
+        alert(`✅ Candidat "${name}" approuvé ! Certificat GHULABE RECRUIT émis.`);
+      } catch (err: any) {
+        alert(`Erreur lors de l'approbation : ${err.message}`);
+      }
+    };
 
-  const handleRejectApp = (id: string) => {
-    setPendingApps(pendingApps.filter(a => a.id !== id));
-    alert("❌ Candidature refusée. Email de notification transmis.");
-  };
+    const handleRejectApp = async (id: string) => {
+      if (!accessToken) return;
+      try {
+        await GhulabeBackend.updateAppStatus(id, 'rejected', accessToken);
+        setPendingApps(pendingApps.filter(a => a.id !== id));
+        alert("❌ Candidature refusée. Email de notification transmis.");
+      } catch (err: any) {
+        alert(`Erreur lors du refus : ${err.message}`);
+      }
+    };
 
   const toggleSuspendDev = (id: string) => {
     setDevList(devList.map(d => {
