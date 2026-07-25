@@ -76,7 +76,7 @@ export const MeView: React.FC<MeViewProps> = ({
     }
   };
 
-  conconst handleApproveApp = async (id: string, name: string) => {
+  const handleApproveApp = async (id: string, name: string) => {
       if (!accessToken) return;
       try {
         await GhulabeBackend.updateAppStatus(id, 'approved', accessToken);
