@@ -29,6 +29,8 @@ export async function runWeeklyMonitoring(req: Request, res: Response): Promise<
     return;
   }
 
+    res.status(202).json({ message: 'Surveillance hebdomadaire démarrée.' });
+
   const summary = { domainsScanned: 0, alertsSent: 0, errors: 0 };
 
   try {
@@ -130,8 +132,7 @@ export async function runWeeklyMonitoring(req: Request, res: Response): Promise<
       details: `Surveillance hebdomadaire terminée : ${summary.domainsScanned} domaine(s) scanné(s), ${summary.alertsSent} alerte(s) envoyée(s), ${summary.errors} erreur(s).`,
     });
 
-    res.status(200).json(summary);
-  } catch (err: any) {
-    res.status(500).json({ error_fr: 'Erreur critique lors de la surveillance hebdomadaire.', details: err.message });
+    } catch (err: any) {
+    generateAuditLog({ action: 'WEEKLY_MONITORING_FAILED', ipAddress: 'CRON_WEEKLY', status: 'FAILED', details: `Erreur critique: ${err.message}` });
   }
 }
