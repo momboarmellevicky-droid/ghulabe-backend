@@ -229,6 +229,27 @@ export async function startScan(req: Request, res: Response): Promise<void> {
               status: 'SUCCESS',
               details: `Mission publiée automatiquement suite à un score critique (${score}/10). Alerte ${newAlert.id}.`,
             });
+
+            try {
+              await sendWhatsAppAlert(userId, alertMessageFr, newAlert.id);
+              generateAuditLog({
+                action: 'WHATSAPP_ALERT',
+                userId,
+                ipAddress: ip,
+                targetUrl: cleanUrl,
+                status: 'SUCCESS',
+                details: `WhatsApp envoyé pour l'alerte ${newAlert.id}.`,
+              });
+            } catch (waErr: any) {
+              generateAuditLog({
+                action: 'WHATSAPP_ALERT_FAILED',
+                userId,
+                ipAddress: ip,
+                targetUrl: cleanUrl,
+                status: 'FAILED',
+                details: `Échec envoi WhatsApp: ${waErr.message}`,
+              });
+            }
           } catch (missionErr: any) {
             console.warn('[GHULABE Scan] Publication automatique de mission échouée:', missionErr.message);
             generateAuditLog({
