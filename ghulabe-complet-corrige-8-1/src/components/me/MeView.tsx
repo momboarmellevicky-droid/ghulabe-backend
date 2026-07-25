@@ -68,7 +68,7 @@ export const MeView: React.FC<MeViewProps> = ({
       alert("Session invalide. Reconnectez-vous avec un compte réel avant d'accéder au panneau admin.");
       return;
     }
-    if (twoFaCode === '2026' || twoFaCode === '123456' || twoFaCode.length >= 4) {
+    if (twoFaCode === '2026' || twoFaCode === '123456') {
       setTwoFaVerified(true);
       setIsAdminMode(true);
     } else {
