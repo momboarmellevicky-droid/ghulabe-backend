@@ -62,7 +62,7 @@ export async function runWeeklyMonitoring(req: Request, res: Response): Promise<
         const criticalCount = findings.filter((f) => f.severity === 'critique').length;
         const isCertified = score >= 8 && criticalCount === 0;
 
-      
+      await supabaseAdmin
         .from('domains')
         .update({
           score,
