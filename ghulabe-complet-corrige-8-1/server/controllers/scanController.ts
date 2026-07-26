@@ -6,6 +6,7 @@ import { runFullScan } from '../services/scanEngine';
 import { generateFindingsFromScan, VulnerabilityFinding } from '../services/geminiAnalysis';
 import { generateScanReportPdf } from '../services/pdfReportService';
 import { sendWhatsAppAlert } from '../services/whatsappService';
+import { sendScanReportEmail } from '../services/emailService';
 /**
  * Calcule un score de sécurité sur 10 à partir des faits réels du scan
  * (headers manquants, SSL invalide/expirant, fichiers exposés, gravité des
