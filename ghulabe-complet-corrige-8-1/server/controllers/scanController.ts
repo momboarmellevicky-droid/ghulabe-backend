@@ -42,9 +42,8 @@ export function computeSecurityScore(
 export async function startScan(req: Request, res: Response): Promise<void> {
   const { url, legalCheckboxAccepted } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
-  const userId = req.user?.id; // uuid réel si authentifié, undefined sinon (scan anonyme)
+  const userId = req.user?.id;
 
-  // MANDATORY CHECK : ACCORD OBLIGATOIRE CASE À COCHER
   if (!legalCheckboxAccepted) {
     generateAuditLog({
       action: 'SCAN_REJECTED_NO_LEGAL_CONSENT',
@@ -72,7 +71,6 @@ export async function startScan(req: Request, res: Response): Promise<void> {
   }
 
   const cleanUrl = url.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-
   generateAuditLog({
     action: 'SCAN_STARTED',
     userId: userId || 'ANONYMOUS',
@@ -137,21 +135,20 @@ export async function startScan(req: Request, res: Response): Promise<void> {
           if (domainInsertError || !newDomain) throw domainInsertError || new Error('Création domaine échouée sans erreur explicite.');
           domainId = newDomain.id;
         }
-
         // 3b. Insère le scan lié à ce domaine
         try {
-  reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `${domainId}-${Date.now()}`);
-} catch (pdfErr: any) {
-  console.warn('[GHULABE Scan] Génération PDF échouée:', pdfErr.message);
-  generateAuditLog({
-    action: 'PDF_GENERATION_FAILED',
-    userId: userId || 'ANONYMOUS',
-    ipAddress: ip,
-    targetUrl: cleanUrl,
-    status: 'FAILED',
-    details: `Échec génération PDF: ${pdfErr.message}`,
-  });
-  reportPdfUrl = null;
+          reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `${domainId}-${Date.now()}`);
+        } catch (pdfErr: any) {
+          console.warn('[GHULABE Scan] Génération PDF échouée:', pdfErr.message);
+          generateAuditLog({
+            action: 'PDF_GENERATION_FAILED',
+            userId: userId || 'ANONYMOUS',
+            ipAddress: ip,
+            targetUrl: cleanUrl,
+            status: 'FAILED',
+            details: `Échec génération PDF: ${pdfErr.message}`,
+          });
+          reportPdfUrl = null;
         }
         const { data: newScan, error: scanInsertError } = await supabaseAdmin
           .from('scans')
@@ -260,7 +257,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
           details: `Scan calculé mais non sauvegardé: ${dbErr.message}`,
         });
       }
-    }
+              }
     // Scan anonyme (pas de userId) : jamais persisté (domains.user_id attend un uuid réel), résultat renvoyé quand même.
 
     generateAuditLog({
@@ -302,11 +299,12 @@ export async function startScan(req: Request, res: Response): Promise<void> {
       ipAddress: ip,
       targetUrl: cleanUrl,
       status: 'FAILED',
-      details: `Erreur critique lors du scan : ${err.message}`,
+      details: `Erreur critique lors du scan: ${err.message}`,
     });
     res.status(500).json({ error_fr: "Erreur critique lors du scan.", details: err.message });
   }
 }
+
 export async function getScanReport(req: Request, res: Response): Promise<void> {
   const { scanId } = req.params;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -336,7 +334,6 @@ export async function getScanReport(req: Request, res: Response): Promise<void> 
       .eq('id', scanId)
       .eq('domains.user_id', userId)
       .maybeSingle();
-
     if (error) {
       generateAuditLog({
         action: 'SCAN_REPORT_DB_ERROR',
@@ -407,7 +404,8 @@ export async function getScanReport(req: Request, res: Response): Promise<void> 
     });
     res.status(500).json({ error_fr: "Erreur critique lors de la lecture du rapport.", details: err.message });
   }
-      }
+}
+
 export async function getScanHistory(req: Request, res: Response): Promise<void> {
   const { domainId } = req.params;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -426,7 +424,6 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
     });
     return;
   }
-
   try {
     // 1. Vérifie que le domaine existe et appartient bien à l'utilisateur (anti-IDOR)
     const { data: domain, error: domainError } = await supabaseAdmin
@@ -494,99 +491,10 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
       ipAddress: ip,
       targetUrl: domain.url,
       status: 'SUCCESS',
-      details: `Consultation de l'historiqu
-      });
-    res.status(500).json({ error_fr: "Erreur critique lors de la lecture du rapport.", details: err.message });
-  }
-      }
-export async function getScanHistory(req: Request, res: Response): Promise<void> {
-  const { domainId } = req.params;
-  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
-  const userId = req.user?.id;
-
-  if (!domainId) {
-    res.status(400).json({ error_fr: "ID de domaine manquant.", error_en: "Missing domain ID." });
-    return;
-  }
-
-  if (!userId) {
-    res.status(401).json({
-      error_fr: "🔒 Accès non autorisé : authentification requise pour consulter un historique.",
-      error_en: "🔒 Unauthorized: authentication required to view history.",
-      code: 'UNAUTHORIZED_NO_TOKEN',
-    });
-    return;
-  }
-
-  try {
-    const { data: domain, error: domainError } = await supabaseAdmin
-      .from('domains')
-      .select('id, url, user_id')
-      .eq('id', domainId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (domainError) {
-      generateAuditLog({
-        action: 'SCAN_HISTORY_DB_ERROR',
-        userId,
-        ipAddress: ip,
-        targetUrl: domainId,
-        status: 'FAILED',
-        details: `Erreur Supabase lors de la lecture du domaine: ${domainError.message}`,
-      });
-      res.status(500).json({ error_fr: "Erreur lors de la lecture du domaine.", details: domainError.message });
-      return;
-    }
-
-    if (!domain) {
-      generateAuditLog({
-        action: 'SCAN_HISTORY_DOMAIN_NOT_FOUND_OR_DENIED',
-        userId,
-        ipAddress: ip,
-        targetUrl: domainId,
-        status: 'BLOCKED',
-        details: 'Domaine introuvable ou n\'appartenant pas à cet utilisateur.',
-      });
-      res.status(404).json({
-        error_fr: "Domaine introuvable.",
-        error_en: "Domain not found.",
-        code: 'DOMAIN_NOT_FOUND',
-      });
-      return;
-    }
-
-    const { data: scans, error: scansError } = await supabaseAdmin
-      .from('scans')
-      .select('id, score, created_at')
-      .eq('domain_id', domainId)
-      .order('created_at', { ascending: false });
-
-    if (scansError) {
-      generateAuditLog({
-        action: 'SCAN_HISTORY_DB_ERROR',
-        userId,
-        ipAddress: ip,
-        targetUrl: domain.url,
-        status: 'FAILED',
-        details: `Erreur Supabase lors de la lecture de l'historique: ${scansError.message}`,
-      });
-      res.status(500).json({ error_fr: "Erreur lors de la lecture de l'historique.", details: scansError.message });
-      return;
-    }
-
-    const history = scans || [];
-
-    generateAuditLog({
-      action: 'SCAN_HISTORY_ACCESSED',
-      userId,
-      ipAddress: ip,
-      targetUrl: domain.url,
-      status: 'SUCCESS',
       details: `Consultation de l'historique (${history.length} scan(s)) pour le domaine ${domainId}.`,
     });
 
-   res.status(200).json({
+    res.status(200).json({
       domainId,
       url: domain.url,
       totalScans: history.length,
@@ -605,6 +513,7 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
     res.status(500).json({ error_fr: "Erreur critique lors de la lecture de l'historique.", details: err.message });
   }
 }
+
 export async function previewScan(req: Request, res: Response): Promise<void> {
   const { url, legalCheckboxAccepted } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -636,7 +545,6 @@ export async function previewScan(req: Request, res: Response): Promise<void> {
     status: 'SUCCESS',
     details: 'Démarrage du scan aperçu (gratuit, résumé uniquement).',
   });
-
   try {
     const facts = await runFullScan(cleanUrl, 'ANONYMOUS', ip);
     const findings = await generateFindingsFromScan(facts, 'ANONYMOUS', ip);
@@ -685,4 +593,4 @@ export async function previewScan(req: Request, res: Response): Promise<void> {
     });
     res.status(500).json({ error_fr: "Erreur lors de l'aperçu du scan.", details: err.message });
   }
-      }
+}
