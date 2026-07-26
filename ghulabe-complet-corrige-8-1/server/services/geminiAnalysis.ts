@@ -8,9 +8,9 @@ import type { RawScanFacts } from './scanEngine';
 // l'interface (impact CEO, risque financier, urgence, code de remédiation).
 // Gemini n'effectue AUCUNE requête réseau vers la cible : il ne fait
 // qu'interpréter des données déjà collectées par le vrai moteur de scan.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 const GEMINI_TIMEOUT_MS = 20000;
 
