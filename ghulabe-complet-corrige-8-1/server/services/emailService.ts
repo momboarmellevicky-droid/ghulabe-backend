@@ -175,3 +175,91 @@ export async function sendVulnerabilityAlertEmail(
     return false;
   }
 }
+/**
+ * Envoi du rapport de scan par email, réservé au plan Gardien.
+ * Déclenché à chaque scan terminé (pas seulement en cas de score critique).
+ */
+export async function sendScanReportEmail(
+  toEmail: string,
+  url: string,
+  score: number,
+  findingsCount: number,
+  reportPdfUrl: string | null,
+  lang: 'fr' | 'en',
+  userId: string,
+  ip: string
+): Promise<boolean> {
+  if (!RESEND_API_KEY) {
+    generateAuditLog({
+      action: 'SCAN_REPORT_EMAIL_SKIPPED',
+      userId,
+      ipAddress: ip,
+      status: 'BLOCKED',
+      details: `Envoi rapport email ignoré (RESEND_API_KEY non configurée) pour ${toEmail}.`,
+    });
+    return false;
+  }
+
+  const subject = lang === 'en'
+    ? `GHULABE Scan Report — ${url} (${score}/10)`
+    : `Rapport de scan GHULABE — ${url} (${score}/10)`;
+
+  const bodyText = lang === 'en'
+    ? `Your GHULABE scan for ${url} is complete. Score: ${score}/10. ${findingsCount} finding(s) detected. ${reportPdfUrl ? `Full report: ${reportPdfUrl}` : 'Report unavailable.'}`
+    : `Votre scan GHULABE pour ${url} est terminé. Score : ${score}/10. ${findingsCount} faille(s) détectée(s). ${reportPdfUrl ? `Rapport complet : ${reportPdfUrl}` : 'Rapport indisponible.'}`;
+
+  const html = `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;">
+    <h2 style="color:#0066FF;">${lang === 'en' ? 'GHULABE Scan Report' : 'Rapport de scan GHULABE'}</h2>
+    <p>${lang === 'en' ? 'Domain' : 'Domaine'} : <strong>${url}</strong></p>
+    <p style="font-size:28px;font-weight:bold;color:${score >= 7 ? '#00FF88' : score >= 4 ? '#FF6B2D' : '#FF2D2D'};">${score}/10</p>
+    <p>${findingsCount} ${lang === 'en' ? 'finding(s) detected' : 'faille(s) détectée(s)'}.</p>
+    ${reportPdfUrl ? `<p><a href="${reportPdfUrl}" style="color:#00FF88;">${lang === 'en' ? 'Download full PDF report' : 'Télécharger le rapport PDF complet'}</a></p>` : ''}
+  </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+        to: [toEmail],
+        subject,
+        html,
+        text: bodyText,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      generateAuditLog({
+        action: 'SCAN_REPORT_EMAIL_FAILED',
+        userId,
+        ipAddress: ip,
+        status: 'FAILED',
+        details: `Échec de l'envoi du rapport email à ${toEmail} : ${res.status} ${errorBody}`,
+      });
+      return false;
+    }
+
+    generateAuditLog({
+      action: 'SCAN_REPORT_EMAIL_SENT',
+      userId,
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: `Rapport de scan envoyé par email à ${toEmail}.`,
+    });
+    return true;
+  } catch (err: any) {
+    generateAuditLog({
+      action: 'SCAN_REPORT_EMAIL_FAILED',
+      userId,
+      ipAddress: ip,
+      status: 'FAILED',
+      details: `Erreur critique lors de l'envoi du rapport email : ${err.message}`,
+    });
+    return false;
+  }
+        }
