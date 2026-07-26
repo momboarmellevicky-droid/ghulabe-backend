@@ -89,7 +89,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
 
     const score = computeSecurityScore(facts.headers_checked, facts.ssl_status, facts.exposed_files.length, findings);
     const durationSeconds = Math.round(facts.duration_ms / 1000);
-    const domainStatus = score >= 7 ? 'safe' : score >= 4 ? 'warning' : 'critical';
+    const domainStatus = score >= 7 ? 'safe' : score >= 6 ? 'warning' : 'critical';
 
     // 3. Persistance réelle — schéma confirmé : scans.domain_id référence domains.id (pas de user_id/url/status sur scans directement)
     let scanId: string | null = null;
