@@ -259,7 +259,37 @@ export async function startScan(req: Request, res: Response): Promise<void> {
         });
       }
               }
-    // Scan anonyme (pas de userId) : jamais persisté (domains.user_id attend un uuid réel), résultat renvoyé quand même.
+    // Scan anonyme (pas de userId) : jamais persisté (domains.user_id attend un uuid réel), résultat renvoyé quand même.// Envoi automatique email + WhatsApp du résultat de scan (plan Gardien uniquement)
+    if (userId) {
+      try {
+        const { data: gardienUser } = await supabaseAdmin
+          .from('users')
+          .select('plan, email, phone')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (gardienUser?.plan === 'gardien') {
+          const summaryFr = `Votre scan de ${cleanUrl} est terminé. Score : ${score}/10. ${findings.length} faille(s) détectée(s).`;
+
+          if (gardienUser.email) {
+            await sendScanReportEmail(gardienUser.email, cleanUrl, score, findings.length, reportPdfUrl, 'fr', userId, ip);
+          }
+          if (gardienUser.phone) {
+            await sendWhatsAppAlert(gardienUser.phone, summaryFr, userId, ip);
+          }
+        }
+      } catch (notifyErr: any) {
+        console.warn('[GHULABE Scan] Notification Gardien échouée:', notifyErr.message);
+        generateAuditLog({
+          action: 'SCAN_GARDIEN_NOTIFY_FAILED',
+          userId,
+          ipAddress: ip,
+          targetUrl: cleanUrl,
+          status: 'FAILED',
+          details: `Échec notification plan Gardien: ${notifyErr.message}`,
+        });
+      }
+    }
 
     generateAuditLog({
       action: 'SCAN_COMPLETED',
