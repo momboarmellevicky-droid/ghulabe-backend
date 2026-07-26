@@ -5,6 +5,7 @@ import { generateAuditLog } from '../utils/crypto';
 import { runFullScan } from '../services/scanEngine';
 import { generateFindingsFromScan, VulnerabilityFinding } from '../services/geminiAnalysis';
 import { generateScanReportPdf } from '../services/pdfReportService';
+import { sendWhatsAppAlert } from '../services/whatsappService';
 /**
  * Calcule un score de sécurité sur 10 à partir des faits réels du scan
  * (headers manquants, SSL invalide/expirant, fichiers exposés, gravité des
@@ -170,7 +171,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
           try {
             const { data: userRow } = await supabaseAdmin
               .from('users')
-              .select('name')
+              .select('name, phone')
               .eq('id', userId)
               .maybeSingle();
             const clientName = userRow?.name || 'Client GHULABE';
@@ -230,25 +231,9 @@ export async function startScan(req: Request, res: Response): Promise<void> {
               details: `Mission publiée automatiquement suite à un score critique (${score}/10). Alerte ${newAlert.id}.`,
             });
 
-            try {
-              await sendWhatsAppAlert(userId, alertMessageFr, newAlert.id);
-              generateAuditLog({
-                action: 'WHATSAPP_ALERT',
-                userId,
-                ipAddress: ip,
-                targetUrl: cleanUrl,
-                status: 'SUCCESS',
-                details: `WhatsApp envoyé pour l'alerte ${newAlert.id}.`,
-              });
-            } catch (waErr: any) {
-              generateAuditLog({
-                action: 'WHATSAPP_ALERT_FAILED',
-                userId,
-                ipAddress: ip,
-                targetUrl: cleanUrl,
-                status: 'FAILED',
-                details: `Échec envoi WhatsApp: ${waErr.message}`,
-              });
+            // 3c-iii. Envoi de l'alerte WhatsApp au client si un numéro de téléphone est renseigné.
+            if (userRow?.phone) {
+              await sendWhatsAppAlert(userRow.phone, alertMessageFr, userId, ip);
             }
           } catch (missionErr: any) {
             console.warn('[GHULABE Scan] Publication automatique de mission échouée:', missionErr.message);
@@ -509,6 +494,95 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
       ipAddress: ip,
       targetUrl: domain.url,
       status: 'SUCCESS',
+      details: `Consultation de l'historiqu
+      });
+    res.status(500).json({ error_fr: "Erreur critique lors de la lecture du rapport.", details: err.message });
+  }
+      }
+export async function getScanHistory(req: Request, res: Response): Promise<void> {
+  const { domainId } = req.params;
+  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
+  const userId = req.user?.id;
+
+  if (!domainId) {
+    res.status(400).json({ error_fr: "ID de domaine manquant.", error_en: "Missing domain ID." });
+    return;
+  }
+
+  if (!userId) {
+    res.status(401).json({
+      error_fr: "🔒 Accès non autorisé : authentification requise pour consulter un historique.",
+      error_en: "🔒 Unauthorized: authentication required to view history.",
+      code: 'UNAUTHORIZED_NO_TOKEN',
+    });
+    return;
+  }
+
+  try {
+    const { data: domain, error: domainError } = await supabaseAdmin
+      .from('domains')
+      .select('id, url, user_id')
+      .eq('id', domainId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (domainError) {
+      generateAuditLog({
+        action: 'SCAN_HISTORY_DB_ERROR',
+        userId,
+        ipAddress: ip,
+        targetUrl: domainId,
+        status: 'FAILED',
+        details: `Erreur Supabase lors de la lecture du domaine: ${domainError.message}`,
+      });
+      res.status(500).json({ error_fr: "Erreur lors de la lecture du domaine.", details: domainError.message });
+      return;
+    }
+
+    if (!domain) {
+      generateAuditLog({
+        action: 'SCAN_HISTORY_DOMAIN_NOT_FOUND_OR_DENIED',
+        userId,
+        ipAddress: ip,
+        targetUrl: domainId,
+        status: 'BLOCKED',
+        details: 'Domaine introuvable ou n\'appartenant pas à cet utilisateur.',
+      });
+      res.status(404).json({
+        error_fr: "Domaine introuvable.",
+        error_en: "Domain not found.",
+        code: 'DOMAIN_NOT_FOUND',
+      });
+      return;
+    }
+
+    const { data: scans, error: scansError } = await supabaseAdmin
+      .from('scans')
+      .select('id, score, created_at')
+      .eq('domain_id', domainId)
+      .order('created_at', { ascending: false });
+
+    if (scansError) {
+      generateAuditLog({
+        action: 'SCAN_HISTORY_DB_ERROR',
+        userId,
+        ipAddress: ip,
+        targetUrl: domain.url,
+        status: 'FAILED',
+        details: `Erreur Supabase lors de la lecture de l'historique: ${scansError.message}`,
+      });
+      res.status(500).json({ error_fr: "Erreur lors de la lecture de l'historique.", details: scansError.message });
+      return;
+    }
+
+    const history = scans || [];
+
+    generateAuditLog({
+      action: 'SCAN_HISTORY_ACCESSED',
+      userId,
+      ipAddress: ip,
+      targetUrl: domain.url,
+      status: 'SUCCESS',
       details: `Consultation de l'historique (${history.length} scan(s)) pour le domaine ${domainId}.`,
     });
 
@@ -530,7 +604,8 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
     });
     res.status(500).json({ error_fr: "Erreur critique lors de la lecture de l'historique.", details: err.message });
   }
-}export async function previewScan(req: Request, res: Response): Promise<void> {
+}
+export async function previewScan(req: Request, res: Response): Promise<void> {
   const { url, legalCheckboxAccepted } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
@@ -610,4 +685,4 @@ export async function getScanHistory(req: Request, res: Response): Promise<void>
     });
     res.status(500).json({ error_fr: "Erreur lors de l'aperçu du scan.", details: err.message });
   }
-}
+      }
