@@ -89,7 +89,7 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 }
 
-const domainStatus = score >= 7 ? 'safe' : score >= 4 ? 'warning' : 'critical';
+const 
 // considéré comme un ancien mot de passe chiffré (AES) à migrer.
 function isBcryptHash(value: string): boolean {
   return /^\$2[aby]\$/.test(value);
