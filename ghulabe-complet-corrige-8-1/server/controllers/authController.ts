@@ -89,7 +89,7 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 }
 
-// Un hash bcrypt commence toujours par $2a$, $2b$ ou $2y$. Tout le reste est
+const domainStatus = score >= 7 ? 'safe' : score >= 4 ? 'warning' : 'critical';
 // considéré comme un ancien mot de passe chiffré (AES) à migrer.
 function isBcryptHash(value: string): boolean {
   return /^\$2[aby]\$/.test(value);
