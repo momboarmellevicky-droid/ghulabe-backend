@@ -175,9 +175,10 @@ export async function startScan(req: Request, res: Response): Promise<void> {
             const clientName = userRow?.name || 'Client GHULABE';
 
             const criticalCount = findings.filter((f) => f.severity === 'critique').length;
-            const alertMessageFr = `⚠️ Score critique (${score}/10) détecté sur ${cleanUrl}. ${criticalCount} faille(s) critique(s) identifiée(s). Une mission de correction a été publiée automatiquement.`;
-            const alertMessageEn = `⚠️ Critical score (${score}/10) detected on ${cleanUrl}. ${criticalCount} critical vulnerability(ies) found. A remediation mission has been published automatically.`;
-
+        const criticalityDetailFr = criticalCount > 0 ? `${criticalCount} faille(s) critique(s) identifiée(s).` : `Score abaissé par des lacunes de configuration (en-têtes de sécurité, SSL) sans faille critique isolée.`;
+    const criticalityDetailEn = criticalCount > 0 ? `${criticalCount} critical vulnerability(ies) found.` : `Score lowered by configuration gaps (security headers, SSL) with no isolated critical vulnerability.`;
+    const alertMessageFr = `⚠️ Score critique (${score}/10) détecté sur ${cleanUrl}. ${criticalityDetailFr} Une mission de correction a été publiée automatiquement.`;
+    const alertMessageEn = `⚠️ Critical score (${score}/10) detected on ${cleanUrl}. ${criticalityDetailEn} A remediation mission has been published automatically.`;
             // 3c-i. Alerte liée au domaine et à l'utilisateur (alerts.user_id existe : pas besoin de jointure via domains).
             const { data: newAlert, error: alertInsertError } = await supabaseAdmin
               .from('alerts')
