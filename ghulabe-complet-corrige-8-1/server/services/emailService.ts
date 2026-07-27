@@ -263,3 +263,79 @@ export async function sendScanReportEmail(
     return false;
   }
         }
+export async function sendPasswordResetEmail(
+  toEmail: string,
+  otp: string,
+  lang: 'fr' | 'en',
+  userId: string,
+  ip: string
+): Promise<boolean> {
+  if (!RESEND_API_KEY) {
+    generateAuditLog({
+      action: 'EMAIL_PASSWORD_RESET_SKIPPED',
+      userId,
+      ipAddress: ip,
+      status: 'BLOCKED',
+      details: `Envoi email reset ignoré (RESEND_API_KEY non configurée) pour ${toEmail}.`,
+    });
+    return false;
+  }
+
+  const subject = lang === 'en' ? 'Reset your GHULABE password' : 'Réinitialisez votre mot de passe GHULABE';
+  const text = lang === 'en'
+    ? `Your GHULABE password reset code is: ${otp}. This code expires in 15 minutes. If you did not request this, ignore this email.`
+    : `Votre code de réinitialisation GHULABE est : ${otp}. Ce code expire dans 15 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.`;
+  const html = `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;">
+    <h2 style="color:#0066FF;">${lang === 'en' ? 'GHULABE — Password Reset' : 'GHULABE — Réinitialisation du mot de passe'}</h2>
+    <p>${lang === 'en' ? 'Your reset code is:' : 'Votre code de réinitialisation est :'}</p>
+    <p style="font-size:32px;font-weight:bold;letter-spacing:4px;color:#00FF88;">${otp}</p>
+    <p style="color:#9CA3AF;font-size:13px;">${lang === 'en' ? 'This code expires in 15 minutes. If you did not request this, ignore this email.' : "Ce code expire dans 15 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email."}</p>
+  </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+        to: [toEmail],
+        subject,
+        html,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      generateAuditLog({
+        action: 'EMAIL_PASSWORD_RESET_FAILED',
+        userId,
+        ipAddress: ip,
+        status: 'FAILED',
+        details: `Échec envoi email reset à ${toEmail} : ${res.status} ${errorBody}`,
+      });
+      return false;
+    }
+
+    generateAuditLog({
+      action: 'EMAIL_PASSWORD_RESET_SENT',
+      userId,
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: `Email de réinitialisation envoyé à ${toEmail}.`,
+    });
+    return true;
+  } catch (err: any) {
+    generateAuditLog({
+      action: 'EMAIL_PASSWORD_RESET_FAILED',
+      userId,
+      ipAddress: ip,
+      status: 'FAILED',
+      details: `Erreur critique lors de l'envoi de l'email reset : ${err.message}`,
+    });
+    return false;
+  }
+}
