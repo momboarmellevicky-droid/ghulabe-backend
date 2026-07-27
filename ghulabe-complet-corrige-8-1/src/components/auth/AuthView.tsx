@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GhulabeBackend } from '../../services/apiClient';
 import { Language } from '../../types';
-import { Lock, Mail, User, Globe, ArrowRight, CheckCircle2, AlertOctagon, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, User, Globe, ArrowRight, CheckCircle2, AlertOctagon, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 // Forme du user renvoyé par verify2FA (server/controllers/authController.ts) : volontairement
 // plus restreinte que l'interface User complète (pas de name/country, non stockés dans le JWT).
@@ -18,7 +18,7 @@ interface AuthViewProps {
   onLoginSuccess: (accessToken: string, user: BackendAuthUser) => void;
 }
 
-type Step = 'credentials' | 'otp';
+type Step = 'credentials' | 'otp' | 'forgot' | 'forgot-reset';
 
 export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -30,6 +30,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
   const [otp, setOtp] = useState('');
   const [challengeId, setChallengeId] = useState('');
   const [devNote, setDevNote] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetId, setResetId] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -64,6 +67,44 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
       setErrorMsg(err.message || (lang === 'fr' ? "Erreur d'authentification." : "Authentication error."));
     } finally {
       setLoading(false);
+      const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+    try {
+      const { resetId: newResetId, devNote: note } = await GhulabeBackend.forgotPassword(email, lang);
+      setResetId(newResetId || '');
+      setDevNote(note || '');
+      setStep('forgot-reset');
+      setSuccessMsg(lang === 'fr'
+        ? "📧 Si un compte existe, un code a été envoyé par email."
+        : "📧 If an account exists, a code has been sent by email."
+      );
+    } catch (err: any) {
+      setErrorMsg(err.message || (lang === 'fr' ? "Erreur." : "Error."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setLoading(true);
+    try {
+      await GhulabeBackend.resetPassword(resetId, otp, newPassword);
+      setSuccessMsg(lang === 'fr' ? "✅ Mot de passe réinitialisé. Connectez-vous." : "✅ Password reset. Please log in.");
+      setStep('credentials');
+      setMode('login');
+      setOtp('');
+      setNewPassword('');
+      setPassword('');
+    } catch (err: any) {
+      setErrorMsg(err.message || (lang === 'fr' ? "Code incorrect." : "Invalid code."));
+    } finally {
+      setLoading(false);
+    }
+  };
     }
   };
 
@@ -158,17 +199,30 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
                 <div className="relative">
                   <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
                   <select
-                    value={country}
-                    onChange={e => setCountry(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
-                  >
-                    <option value="Gabon">Gabon</option>
-                    <option value="Cameroun">Cameroun</option>
-                    <option value="Sénégal">Sénégal</option>
-                    <option value="Ghana">Ghana</option>
-                    <option value="Nigeria">Nigeria</option>
-                    <option value="Maroc">Maroc</option>
-                    <option value="Kenya">Kenya</option>
+                    <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                required
+                minLength={6}
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white cursor-pointer">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {mode === 'login' && (
+            <button
+              type="button"
+              onClick={() => { setStep('forgot'); resetMessages(); }}
+              className="text-xs text-gray-500 hover:text-white underline font-mono cursor-pointer"
+            >
+              {lang === 'fr' ? "Mot de passe oublié ?" : "Forgot password?"}
+            </button>
+          )}
                     <option value="Zimbabwe">Zimbabwe</option>
                   </select>
                 </div>
@@ -245,11 +299,128 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
             <label className="font-mono text-gray-300 text-xs">
               {lang === 'fr' ? "Code de vérification (6 chiffres)" : "Verification code (6 digits)"} *
             </label>
+            {step === 'forgot' && (
+        <form onSubmit={handleForgotSubmit} className="space-y-4 text-left text-xs sm:text-sm">
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">
+              {lang === 'fr' ? "Email professionnel" : "Email address"} *
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="direction@entreprise.ga"
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                required
+              />
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 rounded-xl bg-[#FF2D2D]/15 border border-[#FF2D2D]/40 text-[#FF2D2D] text-xs font-bold flex items-center gap-2">
+              <AlertOctagon className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3 rounded-xl bg-[#00FF88]/15 border border-[#00FF88]/40 text-[#00FF88] text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 py-3.5 rounded-xl bg-gradient-to-r from-[#0066FF] to-[#00FF88] hover:from-[#0052CC] hover:to-[#00CC6A] text-[#0A0A0F] font-display font-extrabold text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(0,102,255,0.5)] cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <span>{loading ? (lang === 'fr' ? "Envoi..." : "Sending...") : (lang === 'fr' ? "Envoyer le code" : "Send code")}</span>
+            {!loading && <ArrowRight className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setStep('credentials'); resetMessages(); }}
+            className="w-full text-center text-xs text-gray-500 hover:text-white underline font-mono cursor-pointer"
+          >
+            {lang === 'fr' ? "← Retour" : "← Back"}
+          </button>
+        </form>
+      )}
+
+      {step === 'forgot-reset' && (
+        <form onSubmit={handleResetSubmit} className="space-y-4 text-left text-xs sm:text-sm">
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">
+              {lang === 'fr' ? "Code reçu par email" : "Code received by email"} *
+            </label>
             <div className="relative">
               <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00FF88]" />
               <input
                 type="text"
                 inputMode="numeric"
+                value={otp}
+                onChange={e => setOtp(e.target.value)}
+                placeholder="000000"
+                maxLength={6}
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#00FF88]/50 text-white font-mono text-sm tracking-[0.3em] text-center focus:border-[#00FF88] focus:outline-none"
+                required
+              />
+            </div>
+            {devNote && <p className="text-[10px] text-gray-500 font-mono mt-1">{devNote}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">
+              {lang === 'fr' ? "Nouveau mot de passe" : "New password"} *
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                required
+                minLength={8}
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white cursor-pointer">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 rounded-xl bg-[#FF2D2D]/15 border border-[#FF2D2D]/40 text-[#FF2D2D] text-xs font-bold flex items-center gap-2">
+              <AlertOctagon className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3 rounded-xl bg-[#00FF88]/15 border border-[#00FF88]/40 text-[#00FF88] text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 py-3.5 rounded-xl bg-gradient-to-r from-[#0066FF] to-[#00FF88] hover:from-[#0052CC] hover:to-[#00CC6A] text-[#0A0A0F] font-display font-extrabold text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(0,102,255,0.5)] cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <span>{loading ? (lang === 'fr' ? "Réinitialisation..." : "Resetting...") : (lang === 'fr' ? "Réinitialiser" : "Reset")}</span>
+            {!loading && <ArrowRight className="w-4 h-4" />}
+          </button>
+        </form>
+      )}
+    </div>
+  );
+};
                 value={otp}
                 onChange={e => setOtp(e.target.value)}
                 placeholder="000000"
