@@ -77,7 +77,7 @@ Règles strictes :
 - N'invente jamais de faille qui ne découle pas des faits fournis.
 - Si aucun problème n'est détecté dans les faits, renvoie un tableau vide [].
 - Les montants de risque financier doivent être exprimés en FCFA, de façon réaliste et prudente.
-- Réponds UNIQUEMENT avec le JSON demandé, sans texte autour.`;
+- Réponds UNIQUEMENT avec un objet JSON de la forme {"findings": [...]}, sans texte autour.`;
 
 function buildUserPrompt(facts: RawScanFacts): string {
   const lines: string[] = [
@@ -150,7 +150,7 @@ export async function generateFindingsFromScan(
   userId: string,
   ip: string
 ): Promise<VulnerabilityFinding[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
     generateAuditLog({
@@ -159,7 +159,7 @@ export async function generateFindingsFromScan(
       ipAddress: ip,
       targetUrl: facts.hostname,
       status: 'BLOCKED',
-      details: 'GEMINI_API_KEY absente de la configuration serveur (.env). Analyse IA ignorée.',
+      details: 'GROQ_API_KEY absente de la configuration serveur (.env). Analyse IA ignorée.',
     });
     return [];
   }
@@ -168,39 +168,40 @@ export async function generateFindingsFromScan(
   const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent`, {
+    const res = await fetch(GROQ_API_URL, {
       method: 'POST',
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-        contents: [{ role: 'user', parts: [{ text: buildUserPrompt(facts) }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-          temperature: 0.3,
-        },
+        model: GROQ_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_INSTRUCTION },
+          { role: 'user', content: buildUserPrompt(facts) },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
       }),
     });
 
     if (!res.ok) {
       const errBody = await res.text();
-      throw new Error(`Gemini API a répondu ${res.status} : ${errBody.slice(0, 300)}`);
+      throw new Error(`Groq API a répondu ${res.status} : ${errBody.slice(0, 300)}`);
     }
 
     const data: any = await res.json();
-    const rawText: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const rawText: string | undefined = data?.choices?.[0]?.message?.content;
 
     if (!rawText) {
-      throw new Error('Réponse Gemini vide ou mal formée.');
+      throw new Error('Réponse Groq vide ou mal formée.');
     }
 
-    const parsed = extractJsonArray(rawText);
+    const parsedRoot = extractJsonArray(rawText) as any;
+    const parsed = Array.isArray(parsedRoot) ? parsedRoot : parsedRoot?.findings;
     if (!Array.isArray(parsed)) {
-      throw new Error('La réponse Gemini ne contient pas un tableau JSON.');
+      throw new Error('La réponse Groq ne contient pas un tableau JSON.');
     }
 
     const findings = parsed.map((item, index) => toFullFinding(item, index));
