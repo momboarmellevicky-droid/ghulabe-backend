@@ -19,7 +19,32 @@ export const GhulabeBackend = {
       throw new Error(errData.error_fr || errData.error || 'Identifiants invalides ou serveur indisponible.');
     }
     return await res.json();
+  },async forgotPassword(email: string, lang: 'fr' | 'en' = 'fr'): Promise<{ resetId?: string; devNote?: string }> {
+    const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, lang }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.error || 'Erreur lors de la demande de réinitialisation.');
+    }
+    return data;
   },
+
+  async resetPassword(resetId: string, otp: string, newPassword: string): Promise<{ message_fr: string }> {
+    const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetId, otp, newPassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.error || 'Erreur lors de la réinitialisation.');
+    }
+    return data;
+  },
+  
 
   async verify2FA(challengeId: string, otp: string): Promise<{ accessToken: string; user: any }> {
     const res = await fetch(`${API_BASE_URL}/auth/verify-2fa`, {
