@@ -203,3 +203,288 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
                 </label>
                 <div className="relative">
                   <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+<select
+                    value={country}
+                    onChange={e => setCountry(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border-[#0066FF]/50 text-white font-mono border focus:outline-none focus:border-[#0066FF] appearance-none"
+                    required
+                  >
+                    <option value="Gabon">Gabon</option>
+                    <option value="Cameroun">Cameroun</option>
+                    <option value="Côte d'Ivoire">Côte d'Ivoire</option>
+                    <option value="Sénégal">Sénégal</option>
+                    <option value="Congo">Congo</option>
+                    <option value="Togo">Togo</option>
+                    <option value="Bénin">Bénin</option>
+                    <option value="Autre">{lang === 'fr' ? "Autre" : "Other"}</option>
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">Email *</label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="ex: contact@entreprise.ga"
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border-[#0066FF]/50 text-white font-mono placeholder:text-gray-500 border focus:outline-none focus:border-[#0066FF]"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">
+              {lang === 'fr' ? "Mot de passe" : "Password"} *
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#0A0A0F] border-[#0066FF]/50 text-white font-mono placeholder:text-gray-500 border focus:outline-none focus:border-[#0066FF]"
+                required
+                minLength={8}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {mode === 'login' && (
+            <div className="text-right -mt-2">
+              <button
+                type="button"
+                onClick={() => { setStep('forgot'); resetMessages(); }}
+                className="text-xs font-mono text-[#0066FF] hover:underline cursor-pointer"
+              >
+                {lang === 'fr' ? "Mot de passe oublié ?" : "Forgot password?"}
+              </button>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="flex items-start gap-2 text-red-400 text-xs font-mono bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <AlertOctagon className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div className="flex items-start gap-2 text-[#00FF88] text-xs font-mono bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-lg p-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#0066FF] text-white font-display font-extrabold text-sm shadow-[0_0_20px_rgba(0,102,255,0.4)] hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {loading
+              ? (lang === 'fr' ? "Chargement..." : "Loading...")
+              : mode === 'login'
+                ? (lang === 'fr' ? "Se connecter" : "Sign in")
+                : (lang === 'fr' ? "Créer le compte" : "Create account")
+            }
+            {!loading && <ArrowRight className="w-4 h-4" />}
+          </button>
+        </form>
+      ) : step === 'otp' ? (
+        <form onSubmit={handleOtpSubmit} className="space-y-4 text-left text-xs sm:text-sm">
+          {devNote && (
+            <div className="text-[10px] font-mono text-gray-500 bg-white/5 rounded-lg p-2 break-all">{devNote}</div>
+          )}
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">
+              {lang === 'fr' ? "Code de vérification" : "Verification code"} *
+            </label>
+            <div className="relative">
+              <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type="text"
+                value={otp}
+                onChange={e => setOtp(e.target.value)}
+                placeholder="000000"
+                inputMode="numeric"
+                maxLength={6}
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border-[#0066FF]/50 text-white font-mono tracking-[0.3em] placeholder:text-gray-500 placeholder:tracking-normal border focus:outline-none focus:border-[#0066FF]"
+                required
+              />
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="flex items-start gap-2 text-red-400 text-xs font-mono bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <AlertOctagon className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div className="flex items-start gap-2 text-[#00FF88] text-xs font-mono bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-lg p-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#0066FF] text-white font-display font-extrabold text-sm shadow-[0_0_20px_rgba(0,102,255,0.4)] hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? (lang === 'fr' ? "Vérification..." : "Verifying...") : (lang === 'fr' ? "Valider le code" : "Verify code")}
+            {!loading && <ArrowRight className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setStep('credentials'); resetMessages(); setOtp(''); }}
+            className="w-full text-center text-xs font-mono text-gray-400 hover:text-white cursor-pointer"
+          >
+            {lang === 'fr' ? "← Retour" : "← Back"}
+          </button>
+        </form>
+      ) : step === 'forgot' ? (
+        <form onSubmit={handleForgotSubmit} className="space-y-4 text-left text-xs sm:text-sm">
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">Email *</label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="ex: contact@entreprise.ga"
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border-[#0066FF]/50 text-white font-mono placeholder:text-gray-500 border focus:outline-none focus:border-[#0066FF]"
+                required
+              />
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="flex items-start gap-2 text-red-400 text-xs font-mono bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <AlertOctagon className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div className="flex items-start gap-2 text-[#00FF88] text-xs font-mono bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-lg p-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#0066FF] text-white font-display font-extrabold text-sm shadow-[0_0_20px_rgba(0,102,255,0.4)] hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? (lang === 'fr' ? "Envoi..." : "Sending...") : (lang === 'fr' ? "Envoyer le code" : "Send code")}
+            {!loading && <ArrowRight className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setStep('credentials'); setMode('login'); resetMessages(); }}
+            className="w-full text-center text-xs font-mono text-gray-400 hover:text-white cursor-pointer"
+          >
+            {lang === 'fr' ? "← Retour à la connexion" : "← Back to login"}
+          </button>
+        </form>
+      ) : (
+      <form onSubmit={handleResetSubmit} className="space-y-4 text-left text-xs sm:text-sm">
+          {devNote && (
+            <div className="text-[10px] font-mono text-gray-500 bg-white/5 rounded-lg p-2 break-all">{devNote}</div>
+          )}
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">
+              {lang === 'fr' ? "Code reçu par email" : "Code received by email"} *
+            </label>
+            <div className="relative">
+              <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type="text"
+                value={otp}
+                onChange={e => setOtp(e.target.value)}
+                placeholder="000000"
+                inputMode="numeric"
+                maxLength={6}
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border-[#0066FF]/50 text-white font-mono tracking-[0.3em] placeholder:text-gray-500 placeholder:tracking-normal border focus:outline-none focus:border-[#0066FF]"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-mono text-gray-300 text-xs">
+              {lang === 'fr' ? "Nouveau mot de passe" : "New password"} *
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#0A0A0F] border-[#0066FF]/50 text-white font-mono placeholder:text-gray-500 border focus:outline-none focus:border-[#0066FF]"
+                required
+                minLength={8}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="flex items-start gap-2 text-red-400 text-xs font-mono bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <AlertOctagon className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div className="flex items-start gap-2 text-[#00FF88] text-xs font-mono bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-lg p-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#0066FF] text-white font-display font-extrabold text-sm shadow-[0_0_20px_rgba(0,102,255,0.4)] hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? (lang === 'fr' ? "Réinitialisation..." : "Resetting...") : (lang === 'fr' ? "Réinitialiser" : "Reset password")}
+            {!loading && <ArrowRight className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setStep('credentials'); setMode('login'); resetMessages(); }}
+            className="w-full text-center text-xs font-mono text-gray-400 hover:text-white cursor-pointer"
+          >
+            {lang === 'fr' ? "← Retour à la connexion" : "← Back to login"}
+          </button>
+        </form>
+      )}
+    </div>
+  );
+};
