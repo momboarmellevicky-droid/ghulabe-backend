@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '../config/supabase';
 import { decryptAES256, generateAuditLog } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
-import { sendOtpEmail } from '../services/emailService';
+import { sendOtpEmail, sendPasswordResetEmail } from '../services/emailService';
 
 const pending2FAChallenges = new Map<string, { userId: string; email: string; role: string; plan: string; otp: string; expiresAt: number; attempts: number }>();
 
@@ -18,7 +18,14 @@ setInterval(() => {
 const failedLoginAttempts = new Map<string, { count: number; lockedUntil: number }>();
 const MAX_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
-const BCRYPT_ROUNDS = 12;
+const BCRYPT_ROUNDS = 12; const pendingPasswordResets = new Map<string, { userId: string; email: string; expiresAt: number }>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of pendingPasswordResets.entries()) {
+    if (now > val.expiresAt) pendingPasswordResets.delete(key);
+  }
+}, 60 * 1000);
 
 export async function register(req: Request, res: Response): Promise<void> {
   const { email, password, name, country, role = 'user', plan = 'gratuit', specialites = [], city, bio, rateFcfa, portfolioUrl } = req.body;
@@ -340,3 +347,109 @@ export async function listDevelopers(req: Request, res: Response): Promise<void>
     res.status(500).json({ error_fr: "Erreur serveur lors de la récupération des développeurs.", details: err.message });
   }
 }
+export async function requestPasswordReset(req: Request, res: Response): Promise<void> {
+  const { email, lang } = req.body;
+  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+  if (!email) {
+    res.status(400).json({ error_fr: "Email requis." });
+    return;
+  }
+
+  const genericResponse = () => {
+    res.status(200).json({
+      message_fr: "Si un compte existe avec cet email, un code de réinitialisation a été envoyé.",
+      message_en: "If an account exists with this email, a reset code has been sent.",
+    });
+  };
+
+  try {
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('id, email')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (!user) {
+      genericResponse();
+      return;
+    }
+
+    const otp = process.env.NODE_ENV === 'production' ? Math.floor(100000 + Math.random() * 900000).toString() : '2026';
+    const resetId = `reset-${Date.now()}`;
+
+    pendingPasswordResets.set(resetId, {
+      userId: user.id,
+      email: user.email,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    });
+
+    const emailSent = await sendPasswordResetEmail(user.email, otp, lang === 'en' ? 'en' : 'fr', user.id, ip);
+    pendingPasswordResets.set(resetId, { ...pendingPasswordResets.get(resetId)!, otp } as any);
+
+    generateAuditLog({
+      action: 'PASSWORD_RESET_REQUESTED',
+      userId: user.id,
+      ipAddress: ip,
+      status: emailSent ? 'SUCCESS' : 'FAILED',
+      details: `Demande de réinitialisation de mot de passe (${email}), email ${emailSent ? 'envoyé' : 'NON envoyé'}.`,
+    });
+
+    res.status(200).json({
+      message_fr: "Si un compte existe avec cet email, un code de réinitialisation a été envoyé.",
+      message_en: "If an account exists with this email, a reset code has been sent.",
+      resetId,
+      devNote: process.env.NODE_ENV !== 'production' ? `Code de test : "${otp}"` : undefined,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error_fr: "Erreur lors de la demande de réinitialisation.", details: err.message });
+  }
+}
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  const { resetId, otp, newPassword } = req.body;
+  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+  if (!resetId || !otp || !newPassword) {
+    res.status(400).json({ error_fr: "Champs requis manquants." });
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    res.status(400).json({ error_fr: "Le mot de passe doit contenir au moins 8 caractères." });
+    return;
+  }
+
+  const challenge = pendingPasswordResets.get(resetId) as any;
+  if (!challenge || Date.now() > challenge.expiresAt) {
+    res.status(401).json({ error_fr: "Code expiré ou invalide. Veuillez recommencer." });
+    return;
+  }
+
+  const isDevBypass = process.env.NODE_ENV !== 'production' && otp === '2026';
+  if (challenge.otp !== otp && !isDevBypass) {
+    res.status(401).json({ error_fr: "Code incorrect." });
+    return;
+  }
+
+  try {
+    const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await supabaseAdmin.from('users').update({ password_hash: newHash }).eq('id', challenge.userId);
+    pendingPasswordResets.delete(resetId);
+
+    generateAuditLog({
+      action: 'PASSWORD_RESET_COMPLETED',
+      userId: challenge.userId,
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: 'Mot de passe réinitialisé avec succès.',
+    });
+
+    res.status(200).json({
+      message_fr: "Mot de passe réinitialisé avec succès. Vous pouvez vous connecter.",
+      message_en: "Password reset successfully. You can now log in.",
+    });
+  } catch (err: any) {
+    res.status(500).json({ error_fr: "Erreur lors de la réinitialisation.", details: err.message });
+  }
+      }
