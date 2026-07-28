@@ -125,6 +125,7 @@ const [recruitPhone, setRecruitPhone] = useState('');
   };
 
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [acceptsIndependentStatus, setAcceptsIndependentStatus] = useState(false);
 
 const handleStep2Pay = async () => {
   if (!recruitPhone) {
