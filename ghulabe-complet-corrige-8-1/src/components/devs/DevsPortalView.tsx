@@ -126,6 +126,7 @@ const [recruitPhone, setRecruitPhone] = useState('');
 
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [acceptsIndependentStatus, setAcceptsIndependentStatus] = useState(false);
+  
 
 const handleStep2Pay = async () => {
   if (!recruitPhone) {
@@ -686,6 +687,20 @@ const handleStep2Pay = async () => {
                     required
                   ></textarea>
                 </div>
+                <label className="flex items-start gap-3 p-4 rounded-xl bg-[#0A0A0F] border border-white/10 text-xs text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptsIndependentStatus}
+                    onChange={e => setAcceptsIndependentStatus(e.target.checked)}
+                    className="mt-0.5"
+                    required
+                  />
+                  <span>
+                    {lang === 'fr'
+                      ? "J'interviens en tant que prestataire indépendant. Je reconnais que GHULABE n'est ni responsable ni garant de la qualité ou des conséquences de mon intervention auprès du client, dans tout pays de la zone franc CFA."
+                      : "I act as an independent contractor. I acknowledge that GHULABE is neither responsible nor a guarantor of the quality or consequences of my work with the client, in any CFA franc zone country."}
+                  </span>
+                </label>
 
                 <div className="flex justify-end pt-4 border-t border-white/10">
                   <button
