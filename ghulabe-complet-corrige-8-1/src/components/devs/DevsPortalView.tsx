@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Developer, Language, Mission } from '../../types';
 import { getT } from '../../data/i18n';
 import { MOCK_MISSIONS } from '../../data/mockData';
@@ -50,7 +50,13 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
 const [recruitPhone, setRecruitPhone] = useState('');
   const [isVerifyingSmileId, setIsVerifyingSmileId] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const [livenessActionDone, setLivenessActionDone] = useState(false);
+  const [livenessCameraOn, setLivenessCameraOn] = useState(false);
+  const [livenessError, setLivenessError] = useState<string | null>(null);
+  const livenessVideoRef = useRef<HTMLVideoElement>(null);
+  const livenessCanvasRef = useRef<HTMLCanvasElement>(null);
+  const livenessStreamRef = useRef<MediaStream | null>(null);
   const [realDevelopers, setRealDevelopers] = useState<Developer[]>([]);
 
   useEffect(() => {
@@ -213,24 +219,99 @@ const handleStep2Pay = async () => {
   }
 };
 
+  const handleDocFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingDoc(true);
+    try {
+      const reader = new FileReader();
+      const imageBase64: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch('/api/recruitment/verification-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, kind: 'id_document', imageBase64 }),
+      });
+      if (!res.ok) throw new Error('upload failed');
+      setUploadedDoc(true);
+    } catch {
+      alert(lang === 'fr'
+        ? "Échec de l'envoi du document. Vérifiez votre connexion et réessayez."
+        : "Failed to upload document. Check your connection and retry."
+      );
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const startLivenessCamera = async () => {
+    setLivenessError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      livenessStreamRef.current = stream;
+      if (livenessVideoRef.current) livenessVideoRef.current.srcObject = stream;
+      setLivenessCameraOn(true);
+    } catch {
+      setLivenessError(lang === 'fr'
+        ? "Accès caméra refusé ou indisponible."
+        : "Camera access denied or unavailable."
+      );
+    }
+  };
+
+  const captureLivenessPhoto = async () => {
+    const video = livenessVideoRef.current;
+    const canvas = livenessCanvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+    try {
+      const res = await fetch('/api/recruitment/verification-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, kind: 'liveness', imageBase64 }),
+      });
+      if (!res.ok) throw new Error('upload failed');
+      setLivenessActionDone(true);
+      livenessStreamRef.current?.getTracks().forEach((tr) => tr.stop());
+      setLivenessCameraOn(false);
+    } catch {
+      alert(lang === 'fr'
+        ? "Échec de l'envoi de la photo. Réessayez."
+        : "Failed to upload photo. Retry."
+      );
+    }
+  };
+
   const handleStartSmileVerification = () => {
     if (!uploadedDoc || !livenessActionDone) {
       alert(lang === 'fr' 
-        ? "Veuillez joindre votre pièce d'identité et effectuer la preuve de vie (clignement des yeux / rotation)."
+        ? "Veuillez joindre votre pièce d'identité et effectuer la preuve de vie (photo caméra)."
         : "Please upload ID and perform liveness action."
       );
       return;
     }
+    // NOTE HONNÊTE : ceci transmet le document + la photo réelle pour examen
+    // manuel par l'équipe GHULABE. Il ne s'agit pas d'une vérification
+    // biométrique automatisée tierce (Smile Identity ou équivalent) tant
+    // qu'un compte API KYC payant n'est pas configuré.
     setIsVerifyingSmileId(true);
-
     setTimeout(() => {
       setIsVerifyingSmileId(false);
       alert(lang === 'fr'
-        ? "✅ VÉRIFICATION SMILE IDENTITY RÉUSSIE EN 30s.\n\nBiométrie liveness confirmée. Accès au Test Technique QCM débloqué !"
-        : "✅ SMILE IDENTITY VERIFICATION SUCCESSFUL.\n\nLiveness confirmed. Access to Technical QCM Test unlocked!"
+        ? "✅ Document et photo transmis avec succès.\n\nVotre dossier sera examiné manuellement par l'équipe GHULABE. Accès au Test Technique QCM débloqué !"
+        : "✅ Document and photo submitted successfully.\n\nYour file will be manually reviewed by the GHULABE team. Access to Technical QCM Test unlocked!"
       );
       setRecruitStep(4);
-    }, 2500);
+    }, 800);
   };
 
   const handleFinishQcmTest = async (_scorePct: number, passed: boolean) => {
@@ -827,41 +908,74 @@ const handleStep2Pay = async () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
                 
-                {/* Document Upload */}
+                {/* Document Upload — vrai fichier, vrai envoi */}
                 <div className="p-6 rounded-2xl bg-[#0A0A0F] border border-white/10 space-y-4">
                   <h4 className="font-display font-bold text-white text-sm">1. Document d'identité (CNI ou Passeport)</h4>
                   <p className="text-xs text-gray-400">Le document doit être entier, net et en couleur.</p>
-                  
-                  <button
-                    type="button"
-                    onClick={() => setUploadedDoc(true)}
+
+                  <label
                     className={`w-full py-6 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
                       uploadedDoc ? 'border-[#00FF88] bg-[#00FF88]/10 text-[#00FF88]' : 'border-gray-700 hover:border-[#0066FF] text-gray-400'
                     }`}
                   >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      disabled={uploadingDoc}
+                      onChange={handleDocFileSelect}
+                      className="hidden"
+                    />
                     <CreditCard className="w-6 h-6" />
                     <span className="text-xs font-mono font-bold">
-                      {uploadedDoc ? "✓ Document chargé : CNI-Gabon-Moussavou.jpg (OK)" : "Cliquez pour uploader CNI recto/verso"}
+                      {uploadingDoc
+                        ? "Envoi en cours..."
+                        : uploadedDoc
+                          ? "✓ Document envoyé et enregistré"
+                          : "Cliquez pour uploader CNI recto/verso"}
                     </span>
-                  </button>
+                  </label>
                 </div>
-                {/* Liveness Selfie */}
+                {/* Liveness Selfie — vraie caméra, vraie capture */}
                 <div className="p-6 rounded-2xl bg-[#0A0A0F] border border-white/10 space-y-4">
                   <h4 className="font-display font-bold text-white text-sm">2. Selfie Liveness en temps réel</h4>
-                  <p className="text-xs text-gray-400">Pour prouver que vous n'êtes pas une photo, clignez des yeux ou tournez la tête.</p>
+                  <p className="text-xs text-gray-400">Activez la caméra puis prenez une photo pour prouver votre présence réelle.</p>
 
-                  <button
-                    type="button"
-                    onClick={() => setLivenessActionDone(true)}
-                    className={`w-full py-6 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
-                      livenessActionDone ? 'border-[#00FF88] bg-[#00FF88]/10 text-[#00FF88]' : 'border-gray-700 hover:border-[#0066FF] text-gray-400'
-                    }`}
-                  >
-                    <Smartphone className="w-6 h-6" />
-                    <span className="text-xs font-mono font-bold">
-                      {livenessActionDone ? "✓ Détection Liveness (Clignement d'yeux confirmé) OK" : "Activer Webcam Liveness Test"}
-                    </span>
-                  </button>
+                  {livenessError && (
+                    <p className="text-xs text-[#FF2D2D] font-mono">{livenessError}</p>
+                  )}
+
+                  {!livenessCameraOn && !livenessActionDone && (
+                    <button
+                      type="button"
+                      onClick={startLivenessCamera}
+                      className="w-full py-6 rounded-xl border-2 border-dashed border-gray-700 hover:border-[#0066FF] text-gray-400 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Smartphone className="w-6 h-6" />
+                      <span className="text-xs font-mono font-bold">Activer la caméra</span>
+                    </button>
+                  )}
+
+                  {livenessCameraOn && (
+                    <div className="space-y-3">
+                      <video ref={livenessVideoRef} autoPlay muted playsInline className="w-full rounded-xl border border-[#0066FF]/40" />
+                      <canvas ref={livenessCanvasRef} className="hidden" />
+                      <button
+                        type="button"
+                        onClick={captureLivenessPhoto}
+                        className="w-full py-3 rounded-xl bg-[#0066FF] text-white font-mono text-xs font-bold cursor-pointer"
+                      >
+                        📸 Capturer la photo
+                      </button>
+                    </div>
+                  )}
+
+                  {livenessActionDone && (
+                    <div className="w-full py-6 rounded-xl border-2 border-[#00FF88] bg-[#00FF88]/10 text-[#00FF88] flex flex-col items-center justify-center gap-2">
+                      <Smartphone className="w-6 h-6" />
+                      <span className="text-xs font-mono font-bold">✓ Photo capturée et enregistrée</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -899,6 +1013,7 @@ const handleStep2Pay = async () => {
               <QCMTestView
                 lang={lang}
                 candidateName={formData.fullName || "Moussavou Paul Cédric"}
+                candidateEmail={formData.email}
                 onFinishTest={(scorePct, passed) => {
                   handleFinishQcmTest(scorePct, passed);
                 }}

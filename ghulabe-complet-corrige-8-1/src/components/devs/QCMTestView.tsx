@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Language, QCMQuestion } from '../../types';
 import { getT } from '../../data/i18n';
 import { QCM_QUESTIONS } from '../../data/mockData';
 import confetti from 'canvas-confetti';
-import { 
-  Clock, CheckCircle2, ShieldAlert, 
-  Eye, AlertOctagon, Award
+import {
+  Clock, CheckCircle2, ShieldAlert,
+  Eye, AlertOctagon, Award, VideoOff
 } from 'lucide-react';
 
 interface QCMTestViewProps {
   lang: Language;
   candidateName: string;
+  candidateEmail: string;
   onFinishTest: (scorePercentage: number, passed: boolean, photos: string[]) => void;
   onCancelTest: (reason: string) => void;
 }
@@ -18,6 +19,7 @@ interface QCMTestViewProps {
 export const QCMTestView: React.FC<QCMTestViewProps> = ({
   lang,
   candidateName,
+  candidateEmail,
   onFinishTest,
   onCancelTest
 }) => {
@@ -27,9 +29,14 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [timeLeft, setTimeLeft] = useState(45); // 45 seconds per question
   const [photosTaken, setPhotosTaken] = useState<string[]>([]);
-  const [facePresent, setFacePresent] = useState(true);
   const [testFinished, setTestFinished] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Generate unique fake domain for each test session
   const [fakeDomain] = useState(() => {
@@ -42,6 +49,81 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
   });
 
   const currentQ: QCMQuestion = QCM_QUESTIONS[currentQIndex];
+
+  // Démarre la vraie caméra au chargement du test — obligatoire pour continuer
+  useEffect(() => {
+    let mounted = true;
+
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 }, audio: false })
+      .then((stream) => {
+        if (!mounted) {
+          stream.getTracks().forEach((tr) => tr.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setCameraReady(true);
+      })
+      .catch(() => {
+        if (mounted) {
+          setCameraError(lang === 'fr'
+            ? "Accès caméra refusé ou indisponible. La caméra est obligatoire pour passer ce test (anti-triche)."
+            : "Camera access denied or unavailable. Camera is mandatory to take this test (anti-cheat)."
+          );
+        }
+      });
+
+    return () => {
+      mounted = false;
+      streamRef.current?.getTracks().forEach((tr) => tr.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Capture réelle d'une image depuis le flux vidéo + calcul de luminosité (détection caméra couverte)
+  const captureRealPhoto = useCallback(async (questionIndex: number) => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !streamRef.current) return;
+
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Heuristique réelle (pas un tirage au sort) : luminosité moyenne de la frame,
+    // pour repérer une caméra masquée/obturée — signalé pour examen admin, ne bloque pas seul.
+    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let total = 0;
+    for (let i = 0; i < frame.length; i += 4 * 20) {
+      total += (frame[i] + frame[i + 1] + frame[i + 2]) / 3;
+    }
+    const avgBrightness = total / (frame.length / (4 * 20));
+    const lowLight = avgBrightness < 15;
+
+    const imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+
+    try {
+      await fetch('/api/recruitment/verification-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: candidateEmail,
+          kind: 'qcm_snapshot',
+          imageBase64,
+          questionIndex,
+          lowLight,
+        }),
+      });
+      setPhotosTaken((prev) => [...prev, `photo-${prev.length + 1}-${new Date().toLocaleTimeString()}`]);
+    } catch {
+      // Échec réseau silencieux : ne bloque pas le candidat, mais la preuve manquera à la revue admin
+    }
+  }, [candidateEmail]);
 
   // Timer per question (45s max)
   useEffect(() => {
@@ -59,40 +141,20 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentQIndex, testFinished]);
 
-  // Silent random photo capture simulator (3 photos total)
+  // Captures réelles périodiques (remplace l'ancien simulateur de captures factices)
   useEffect(() => {
-    if (testFinished) return;
-    const photoTimers = [8000, 22000, 38000].map((delay, idx) => {
+    if (testFinished || !cameraReady) return;
+    const photoTimers = [8000, 22000, 38000].map((delay) => {
       return setTimeout(() => {
-        setPhotosTaken((prev) => [
-          ...prev,
-          `photo-${idx + 1}-${new Date().toLocaleTimeString()}`
-        ]);
+        captureRealPhoto(currentQIndex);
       }, delay);
     });
 
-    return () => photoTimers.forEach(t => clearTimeout(t));
-  }, [testFinished]);
-
-  // Simulate occasional face check
-  useEffect(() => {
-    if (testFinished) return;
-    const faceInterval = setInterval(() => {
-      // 99% probability face is present during normal testing
-      const isVisible = Math.random() > 0.01;
-      setFacePresent(isVisible);
-      if (!isVisible) {
-        onCancelTest(lang === 'fr' 
-          ? "ANNULATION AUTOMATISÉE : Visage absent de la webcam pendant le test technique."
-          : "AUTOMATED CANCELLATION: Face absent from webcam surveillance during technical test."
-        );
-      }
-    }, 4000);
-
-    return () => clearInterval(faceInterval);
-  }, [testFinished]);
+    return () => photoTimers.forEach((tm) => clearTimeout(tm));
+  }, [testFinished, cameraReady, currentQIndex, captureRealPhoto]);
 
   const handleSelectOption = (optIndex: number) => {
     setSelectedAnswers({
@@ -111,6 +173,8 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
 
   const finishAndGradeTest = () => {
     setTestFinished(true);
+    streamRef.current?.getTracks().forEach((tr) => tr.stop());
+
     let correctCount = 0;
     QCM_QUESTIONS.forEach((q) => {
       if (selectedAnswers[q.id] === q.correctOptionIndex) {
@@ -153,6 +217,30 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
     return null;
   };
 
+  // Blocage strict tant que la caméra n'est pas active — plus de test possible sans elle
+  if (cameraError) {
+    return (
+      <div className="glass-card max-w-xl mx-auto p-8 rounded-3xl border border-[#FF2D2D]/40 text-center space-y-4">
+        <VideoOff className="w-14 h-14 text-[#FF2D2D] mx-auto" />
+        <h3 className="text-xl font-display font-bold text-white">
+          {lang === 'fr' ? "Caméra requise" : "Camera required"}
+        </h3>
+        <p className="text-sm text-gray-300">{cameraError}</p>
+      </div>
+    );
+  }
+
+  if (!cameraReady) {
+    return (
+      <div className="glass-card max-w-xl mx-auto p-8 rounded-3xl border border-white/10 text-center space-y-4">
+        <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+        <p className="text-sm text-gray-300">
+          {lang === 'fr' ? "Activation de la caméra..." : "Activating camera..."}
+        </p>
+      </div>
+    );
+  }
+
   if (testFinished) {
     const passed = finalScore >= 70;
     const isSuspicious = finalScore === 100;
@@ -179,7 +267,7 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
         <div className="p-4 rounded-2xl bg-[#0A0A0F] border border-white/10 text-xs font-mono text-gray-300 space-y-2 text-left">
           <p>🧑‍💻 Candidat : <strong className="text-white">{candidateName}</strong></p>
           <p>🌐 Rapport simulé : <span className="text-[#80C4FF]">{fakeDomain}</span></p>
-          <p>📸 Photos de surveillance silencieuses : <strong className="text-[#00FF88]">{photosTaken.length || 3} prises</strong></p>
+          <p>📸 Photos de surveillance capturées : <strong className="text-[#00FF88]">{photosTaken.length} prises réelles</strong> (transmises pour revue admin)</p>
           {isSuspicious && (
             <p className="p-2 rounded bg-[#FFB800]/20 text-[#FFB800] border border-[#FFB800]/40 font-bold">
               ⚠️ Alerte de Sécurité : Score parfait de 100%. Statut signalé pour vérification manuelle par Mombo Armelle Vicky.
@@ -206,19 +294,20 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 select-none">
-      
-      {/* Top Test Banner & Webcam Box */}
+
+      {/* Top Test Banner & Webcam RÉELLE */}
       <div className="glass-card p-4 sm:p-6 rounded-2xl border border-[#0066FF]/50 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-4">
-          
-          {/* Webcam Simulator Box */}
+
+          {/* Vraie prévisualisation caméra */}
           <div className="relative w-16 h-12 bg-[#0A0A0F] rounded-lg border-2 border-[#00FF88] overflow-hidden flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(0,255,136,0.4)]">
-            <div className={`absolute top-1 right-1 w-2 h-2 rounded-full ${facePresent ? 'bg-[#FF2D2D]' : 'bg-[#FFB800]'} animate-ping`}></div>
-            <Eye className="w-5 h-5 text-[#00FF88]" />
+            <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+            <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#FF2D2D] animate-ping"></div>
             <span className="absolute bottom-0.5 inset-x-0 bg-black/80 text-[8px] text-center font-mono text-[#00FF88]">
               REC LIVE
             </span>
           </div>
+          <canvas ref={canvasRef} className="hidden" />
 
           <div>
             <div className="flex items-center gap-2">

@@ -19,7 +19,7 @@ const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || 'https://ghulabe.co
 // ============================================================================
 // 1. MIDDLEWARES DE SÉCURITÉ & EN-TÊTES HTTP STRICTS
 // ============================================================================
-app.use(express.json({ limit: '1mb' })); // Prévention d'injections et dénis de service par payload
+app.use(express.json({ limit: '5mb' })); // Relevé pour permettre l'upload réel des photos de vérification anti-triche (base64)
 
 app.use((req: Request, res: Response, next) => {
   // CORS restreint à une liste blanche d'origines autorisées (production + outils de test internes)
