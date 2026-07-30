@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { initiateMobileMoneyPayment, checkPaymentStatus, MobileMoneyOperator } from '../services/paymentService';
 import { generateAuditLog } from '../utils/crypto';
+import { isValidEmail, isValidPhoneNumber } from '../utils/validators';
 
 const RECRUITMENT_FEE_FCFA = 5000;
 
@@ -10,6 +11,16 @@ export async function startRecruitmentPayment(req: Request, res: Response): Prom
 
   if (!email || !phoneNumber || !operator) {
     res.status(400).json({ error_fr: "Email, numéro de téléphone et opérateur requis." });
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error_fr: "Adresse email invalide.", error_en: "Invalid email address." });
+    return;
+  }
+
+  if (!isValidPhoneNumber(phoneNumber)) {
+    res.status(400).json({ error_fr: "Numéro de téléphone invalide.", error_en: "Invalid phone number." });
     return;
   }
 
@@ -61,6 +72,11 @@ export async function uploadVerificationPhoto(req: Request, res: Response): Prom
       error_fr: "Champs requis manquants ou invalides (email, kind, imageBase64).",
       error_en: "Missing or invalid required fields (email, kind, imageBase64).",
     });
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error_fr: "Adresse email invalide.", error_en: "Invalid email address." });
     return;
   }
 

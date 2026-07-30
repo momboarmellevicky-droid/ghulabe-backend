@@ -5,6 +5,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { decryptAES256, generateAuditLog } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
 import { sendOtpEmail, sendPasswordResetEmail } from '../services/emailService';
+import { isValidEmail } from '../utils/validators';
 
 const pending2FAChallenges = new Map<string, { userId: string; email: string; role: string; plan: string; otp: string; expiresAt: number; attempts: number }>();
 
@@ -33,6 +34,11 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   if (!email || !password || !name || !country) {
     res.status(400).json({ error_fr: "Tous les champs obligatoires doivent être renseignés." });
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error_fr: "Adresse email invalide.", error_en: "Invalid email address." });
     return;
   }
 
@@ -107,6 +113,11 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   if (!email || !password) {
     res.status(400).json({ error_fr: "Email et mot de passe requis." });
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error_fr: "Adresse email invalide.", error_en: "Invalid email address." });
     return;
   }
 
@@ -353,6 +364,11 @@ export async function requestPasswordReset(req: Request, res: Response): Promise
 
   if (!email) {
     res.status(400).json({ error_fr: "Email requis." });
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error_fr: "Adresse email invalide.", error_en: "Invalid email address." });
     return;
   }
 
