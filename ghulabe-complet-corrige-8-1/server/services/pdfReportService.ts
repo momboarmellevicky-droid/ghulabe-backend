@@ -68,8 +68,8 @@ export async function generateScanReportPdf(
     doc.fontSize(10).fillColor('#333333').text(`${ameliorations} amélioration(s) recommandée(s) — sous 30 jours`);
     doc.moveDown(1);
 
-    doc.fontSize(12).fillColor('#FF2D2D').text(
-      `🔒 Détail complet verrouillé : impact business, risque financier et correctif exact pour chaque faille sont réservés au plan GARDIEN.`,
+    doc.fontSize(14).fillColor('#FF2D2D').text(
+      `🔒 Passez au Premium pour voir le détail de chaque faille`,
       { width: 495 }
     );
     doc.moveDown(0.3);

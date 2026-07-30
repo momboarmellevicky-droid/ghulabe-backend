@@ -407,9 +407,12 @@ export const ScanView: React.FC<ScanViewProps> = ({
           {currentResult.locked && (
             <div className="glass-card rounded-2xl p-6 sm:p-8 border-2 border-[#FF2D2D]/60 bg-[#FF2D2D]/5 text-center space-y-4">
               <p className="text-lg sm:text-xl font-display font-extrabold text-[#FF2D2D]">
-                🔒 {lang === 'fr'
-                  ? (currentResult.upsell_fr || "Détails complets réservés au plan payant.")
-                  : (currentResult.upsell_en || "Full details reserved for the paid plan.")}
+                🔒 {lang === 'fr' ? "Passez au Premium pour voir le détail de chaque faille" : "Go Premium to see the full detail of each issue"}
+              </p>
+              <p className="text-xs text-gray-400 font-sans">
+                {lang === 'fr'
+                  ? (currentResult.upsell_fr || '')
+                  : (currentResult.upsell_en || '')}
               </p>
               <p className="text-sm text-gray-300 font-sans">
                 {lang === 'fr'
@@ -420,7 +423,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
                 onClick={() => setActiveTab('dash')}
                 className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#FF2D2D] to-[#CC0000] text-white font-display font-extrabold text-sm uppercase tracking-wide shadow-[0_0_25px_rgba(255,45,45,0.5)] cursor-pointer"
               >
-                {lang === 'fr' ? "Débloquer avec GARDIEN — 5000 FCFA" : "Unlock with GARDIEN — 5000 FCFA"}
+                {lang === 'fr' ? "Passer au Premium 🔓" : "Go Premium 🔓"}
               </button>
             </div>
           )}
