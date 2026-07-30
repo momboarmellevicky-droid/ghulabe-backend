@@ -267,7 +267,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
       try {
         if (!reportPdfUrl) {
           try {
-            reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `anon-${Date.now()}`);
+            reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `anon-${Date.now()}`, true);
           } catch (pdfErr: any) {
             console.warn('[GHULABE Scan] Génération PDF (anonyme) échouée:', pdfErr.message);
           }
@@ -335,6 +335,20 @@ export async function startScan(req: Request, res: Response): Promise<void> {
       details: `Scan terminé en ${durationSeconds}s. Score: ${score}/10. ${findings.length} faille(s) détectée(s). Persisté: ${persisted}.`,
     });
 
+    // Verrouillage commercial : un compte anonyme (pas Gardien) ne reçoit jamais le détail
+    // exploitable des failles (impact business, risque financier, correctif). Il reçoit
+    // uniquement le score + un compteur, avec un message d'upsell vers le plan Gardien (5000 FCFA).
+    const isLocked = !userId;
+    const criticalCountResp = findings.filter((f) => f.severity === 'critique').length;
+    const highCountResp = findings.filter((f) => f.severity === 'eleve').length;
+    const lockedFindings = findings.map((f) => ({
+      id: f.id,
+      severity: f.severity,
+      category: f.category,
+      title_fr: f.title_fr,
+      title_en: f.title_en,
+    }));
+
     res.status(200).json({
       message_fr: "Scan externe terminé.",
       message_en: "External scan completed.",
@@ -344,7 +358,14 @@ export async function startScan(req: Request, res: Response): Promise<void> {
       score,
       duration_seconds: durationSeconds,
       report_pdf_url: reportPdfUrl,
-      findings,
+      locked: isLocked,
+      upsell_fr: isLocked
+        ? `🔒 ${findings.length} faille(s) détectée(s) dont ${criticalCountResp} critique(s). Débloquez le détail complet (impact business, risque financier, correctif exact) avec le plan GARDIEN — 5000 FCFA.`
+        : undefined,
+      upsell_en: isLocked
+        ? `🔒 ${findings.length} issue(s) found including ${criticalCountResp} critical. Unlock full details (business impact, financial risk, exact fix) with the GARDIEN plan — 5000 FCFA.`
+        : undefined,
+      findings: isLocked ? lockedFindings : findings,
       headers_checked: {
         hsts: facts.headers_checked.hsts,
         csp: facts.headers_checked.csp,

@@ -56,6 +56,9 @@ export interface ScanResult {
     issuer: string;
   };
   exposed_files: string[];
+  locked?: boolean;
+  upsell_fr?: string;
+  upsell_en?: string;
 }
 
 export interface Domain {

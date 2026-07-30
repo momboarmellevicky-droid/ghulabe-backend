@@ -13,7 +13,8 @@ export async function generateScanReportPdf(
   score: number,
   facts: RawScanFacts,
   findings: VulnerabilityFinding[],
-  scanId: string
+  scanId: string,
+  locked: boolean = false
 ): Promise<string> {
   const doc = new PDFDocument({ margin: 50 });
   const chunks: Buffer[] = [];
@@ -55,6 +56,24 @@ export async function generateScanReportPdf(
 
   if (findings.length === 0) {
     doc.fontSize(10).fillColor('#00CC6A').text('Aucune faille détectée lors de ce scan.');
+  } else if (locked) {
+    // Version gratuite/anonyme : uniquement le décompte par gravité, jamais le détail exploitable
+    // (impact business, risque financier, correctif). Le détail est réservé au plan GARDIEN.
+    const critiques = findings.filter(f => f.severity === 'critique').length;
+    const importants = findings.filter(f => f.severity === 'eleve').length;
+    const ameliorations = findings.filter(f => f.severity === 'moyen' || f.severity === 'faible').length;
+
+    doc.fontSize(10).fillColor('#333333').text(`${critiques} faille(s) critique(s) — à corriger sous 24h`);
+    doc.fontSize(10).fillColor('#333333').text(`${importants} faille(s) importante(s) — à corriger sous 7 jours`);
+    doc.fontSize(10).fillColor('#333333').text(`${ameliorations} amélioration(s) recommandée(s) — sous 30 jours`);
+    doc.moveDown(1);
+
+    doc.fontSize(12).fillColor('#FF2D2D').text(
+      `🔒 Détail complet verrouillé : impact business, risque financier et correctif exact pour chaque faille sont réservés au plan GARDIEN.`,
+      { width: 495 }
+    );
+    doc.moveDown(0.3);
+    doc.fontSize(14).fillColor('#FF2D2D').text(`Débloquez le rapport complet — 5000 FCFA`);
   } else {
     const critiques = findings.filter(f => f.severity === 'critique');
     const importants = findings.filter(f => f.severity === 'eleve');

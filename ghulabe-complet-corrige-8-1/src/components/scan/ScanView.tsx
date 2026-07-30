@@ -403,8 +403,30 @@ export const ScanView: React.FC<ScanViewProps> = ({
             </div>
           </div>
 
+          {/* BANDEAU VERROUILLÉ : scan gratuit/anonyme — détail des failles réservé au plan payant */}
+          {currentResult.locked && (
+            <div className="glass-card rounded-2xl p-6 sm:p-8 border-2 border-[#FF2D2D]/60 bg-[#FF2D2D]/5 text-center space-y-4">
+              <p className="text-lg sm:text-xl font-display font-extrabold text-[#FF2D2D]">
+                🔒 {lang === 'fr'
+                  ? (currentResult.upsell_fr || "Détails complets réservés au plan payant.")
+                  : (currentResult.upsell_en || "Full details reserved for the paid plan.")}
+              </p>
+              <p className="text-sm text-gray-300 font-sans">
+                {lang === 'fr'
+                  ? "Impact business, risque financier et correctif exact copier-coller pour chaque faille : réservés au plan GARDIEN."
+                  : "Business impact, financial risk, and exact copy-paste fix for each issue: reserved for the GARDIEN plan."}
+              </p>
+              <button
+                onClick={() => setActiveTab('dash')}
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#FF2D2D] to-[#CC0000] text-white font-display font-extrabold text-sm uppercase tracking-wide shadow-[0_0_25px_rgba(255,45,45,0.5)] cursor-pointer"
+              >
+                {lang === 'fr' ? "Débloquer avec GARDIEN — 5000 FCFA" : "Unlock with GARDIEN — 5000 FCFA"}
+              </button>
+            </div>
+          )}
+
           {/* TAB 1: POUR LE PATRON / FOR THE CEO */}
-          {activeReportTab === 'ceo' && (
+          {!currentResult.locked && activeReportTab === 'ceo' && (
             <div className="space-y-6">
               <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#0066FF]/30 flex items-center justify-between">
                 <div>
@@ -479,7 +501,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
           )}
 
           {/* TAB 2: POUR LE DÉVELOPPEUR / FOR THE DEVELOPER */}
-          {activeReportTab === 'dev' && (
+          {!currentResult.locked && activeReportTab === 'dev' && (
             <div className="space-y-6">
               <div className="p-6 rounded-2xl bg-[#0D1B2A]/60 border border-[#00FF88]/30 flex items-center justify-between">
                 <div>
