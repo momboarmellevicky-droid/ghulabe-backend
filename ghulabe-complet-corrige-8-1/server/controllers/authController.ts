@@ -5,6 +5,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { decryptAES256, generateAuditLog } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
 import { sendOtpEmail, sendPasswordResetEmail } from '../services/emailService';
+import { sendWhatsAppAlert } from '../services/whatsappService';
 import { isValidEmail } from '../utils/validators';
 
 const pending2FAChallenges = new Map<string, { userId: string; email: string; role: string; plan: string; otp: string; expiresAt: number; attempts: number }>();
@@ -133,7 +134,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   try {
     const { data: user, error: fetchError } = await supabaseAdmin
       .from('users')
-      .select('id, email, password_hash, role, plan')
+      .select('id, email, password_hash, role, plan, phone')
       .eq('email', email)
       .maybeSingle();
 
@@ -211,6 +212,17 @@ export async function login(req: Request, res: Response): Promise<void> {
     });
 
     const emailSent = await sendOtpEmail(email, otp, lang === 'en' ? 'en' : 'fr', user.id, ip);
+
+    // Duplication du code OTP par WhatsApp en plus de l'email — l'email de vérification
+    // atterrit parfois en spam ; WhatsApp offre un deuxième canal indépendant et immédiat.
+    if (user.phone) {
+      const otpMessageFr = `🔐 GHULABE — Votre code de vérification est : ${otp} (valable 5 minutes). Ne le partagez avec personne.`;
+      try {
+        await sendWhatsAppAlert(user.phone, otpMessageFr, user.id, ip);
+      } catch (waErr: any) {
+        console.warn('[GHULABE Auth] Envoi OTP WhatsApp échoué (email reste le canal principal):', waErr.message);
+      }
+    }
 
     if (process.env.NODE_ENV === 'production' && !emailSent) {
       generateAuditLog({

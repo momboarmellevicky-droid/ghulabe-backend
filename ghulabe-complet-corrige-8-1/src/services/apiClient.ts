@@ -59,7 +59,7 @@ export const GhulabeBackend = {
     return await res.json();
   },
 
-  async startScan(url: string, legalCheckboxAccepted: boolean, token?: string): Promise<ScanResult> {
+  async startScan(url: string, legalCheckboxAccepted: boolean, token?: string, contactEmail?: string, contactPhone?: string): Promise<ScanResult> {
     try {
       const res = await fetch(`${API_BASE_URL}/scan/start`, {
         method: 'POST',
@@ -67,7 +67,7 @@ export const GhulabeBackend = {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ url, legalCheckboxAccepted }),
+        body: JSON.stringify({ url, legalCheckboxAccepted, contactEmail, contactPhone }),
       });
       if (!res.ok) {
         const errData = await res.json();

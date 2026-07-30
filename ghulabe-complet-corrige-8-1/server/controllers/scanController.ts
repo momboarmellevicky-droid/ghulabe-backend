@@ -7,6 +7,7 @@ import { generateFindingsFromScan, VulnerabilityFinding } from '../services/gemi
 import { generateScanReportPdf } from '../services/pdfReportService';
 import { sendWhatsAppAlert } from '../services/whatsappService';
 import { sendScanReportEmail } from '../services/emailService';
+import { isValidEmail, isValidPhoneNumber } from '../utils/validators';
 /**
  * Calcule un score de sécurité sur 10 à partir des faits réels du scan
  * (headers manquants, SSL invalide/expirant, fichiers exposés, gravité des
@@ -41,7 +42,7 @@ export function computeSecurityScore(
 }
 
 export async function startScan(req: Request, res: Response): Promise<void> {
-  const { url, legalCheckboxAccepted } = req.body;
+  const { url, legalCheckboxAccepted, contactEmail, contactPhone } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
   const userId = req.user?.id;
 
@@ -260,7 +261,40 @@ export async function startScan(req: Request, res: Response): Promise<void> {
         });
       }
               }
-    // Scan anonyme (pas de userId) : jamais persisté (domains.user_id attend un uuid réel), résultat renvoyé quand même.// Envoi automatique email + WhatsApp du résultat de scan (plan Gardien uniquement)
+    // Scan anonyme (pas de userId) : jamais persisté (domains.user_id attend un uuid réel), résultat renvoyé quand même.
+    // Envoi email + WhatsApp du résultat si la personne a renseigné ses coordonnées (formulaire avant scan).
+    if (!userId && (contactEmail || contactPhone)) {
+      try {
+        if (!reportPdfUrl) {
+          try {
+            reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `anon-${Date.now()}`);
+          } catch (pdfErr: any) {
+            console.warn('[GHULABE Scan] Génération PDF (anonyme) échouée:', pdfErr.message);
+          }
+        }
+
+        const summaryFr = `Votre scan de ${cleanUrl} est terminé. Score : ${score}/10. ${findings.length} faille(s) détectée(s).`;
+
+        if (contactEmail && isValidEmail(contactEmail)) {
+          await sendScanReportEmail(contactEmail, cleanUrl, score, findings.length, reportPdfUrl, 'fr', 'ANONYMOUS', ip);
+        }
+        if (contactPhone && isValidPhoneNumber(contactPhone)) {
+          await sendWhatsAppAlert(contactPhone, summaryFr, 'ANONYMOUS', ip);
+        }
+      } catch (notifyErr: any) {
+        console.warn('[GHULABE Scan] Notification scan anonyme échouée:', notifyErr.message);
+        generateAuditLog({
+          action: 'SCAN_ANONYMOUS_NOTIFY_FAILED',
+          userId: 'ANONYMOUS',
+          ipAddress: ip,
+          targetUrl: cleanUrl,
+          status: 'FAILED',
+          details: `Échec notification scan anonyme: ${notifyErr.message}`,
+        });
+      }
+    }
+
+    // Envoi automatique email + WhatsApp du résultat de scan (plan Gardien uniquement)
     if (userId) {
       try {
         const { data: gardienUser } = await supabaseAdmin

@@ -29,6 +29,8 @@ export const ScanView: React.FC<ScanViewProps> = ({
 
   const [url, setUrl] = useState(initialUrl);
   const [consentChecked, setConsentChecked] = useState(initialScanActive);
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isScanning, setIsScanning] = useState(initialScanActive);
   const [scanStep, setScanStep] = useState(1);
@@ -65,7 +67,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
       // Appel réel au backend GHULABE (moteur Nuclei + Nmap + SSL Labs API).
       // Plus aucune donnée simulée : le score, le temps de scan et les failles
       // renvoyés varient réellement selon le domaine scanné.
-      const result = await GhulabeBackend.startScan(targetUrl, consentChecked, accessToken);
+      const result = await GhulabeBackend.startScan(targetUrl, consentChecked, accessToken, !accessToken ? contactEmail : undefined, !accessToken ? contactPhone : undefined);
       clearInterval(stepInterval);
       clearInterval(progressInterval);
       setScanStep(5);
@@ -94,6 +96,16 @@ export const ScanView: React.FC<ScanViewProps> = ({
     if (!url || !url.includes('.')) {
       setErrorMsg(lang === 'fr' ? "Veuillez entrer un domaine valide (ex: masociete.com)" : "Please enter a valid domain (e.g. mycompany.com)");
       return;
+    }
+    if (!accessToken) {
+      if (!contactEmail || !contactEmail.includes('@') || !contactEmail.includes('.')) {
+        setErrorMsg(lang === 'fr' ? "Veuillez entrer une adresse email valide pour recevoir votre résultat." : "Please enter a valid email address to receive your result.");
+        return;
+      }
+      if (!contactPhone || contactPhone.replace(/[\s.-]/g, '').length < 8) {
+        setErrorMsg(lang === 'fr' ? "Veuillez entrer un numéro WhatsApp valide pour recevoir votre résultat." : "Please enter a valid WhatsApp number to receive your result.");
+        return;
+      }
     }
     setErrorMsg('');
     startScanProcess(url);
@@ -166,6 +178,40 @@ export const ScanView: React.FC<ScanViewProps> = ({
               <span>{isScanning ? (lang === 'fr' ? "SCAN EN COURS..." : "SCANNING...") : t.startScanBtn}</span>
             </button>
           </div>
+
+          {!accessToken && (
+            <div className="p-4 rounded-xl bg-[#0D1B2A] border border-[#00FF88]/30 text-left space-y-3">
+              <p className="text-xs text-[#00FF88] font-mono font-bold uppercase">
+                {lang === 'fr'
+                  ? "📩 Recevez votre résultat immédiatement par email ET WhatsApp"
+                  : "📩 Get your result instantly by email AND WhatsApp"}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="email"
+                  value={contactEmail}
+                  disabled={isScanning}
+                  onChange={(e) => {
+                    setContactEmail(e.target.value);
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder={lang === 'fr' ? "Votre adresse email" : "Your email address"}
+                  className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-white/10 text-white text-sm focus:border-[#00FF88] focus:outline-none transition-all disabled:opacity-50"
+                />
+                <input
+                  type="tel"
+                  value={contactPhone}
+                  disabled={isScanning}
+                  onChange={(e) => {
+                    setContactPhone(e.target.value);
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder={lang === 'fr' ? "Numéro WhatsApp (+241...)" : "WhatsApp number (+241...)"}
+                  className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-white/10 text-white text-sm focus:border-[#00FF88] focus:outline-none transition-all disabled:opacity-50"
+                />
+              </div>
+            </div>
+          )}
 
           {/* ACCORD OBLIGATOIRE CASE À COCHER (CRITICAL REQUIREMENT) */}
           <div className="p-4 rounded-xl bg-[#0D1B2A] border border-[#0066FF]/30 text-left">
