@@ -215,22 +215,30 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     // Duplication du code OTP par WhatsApp en plus de l'email — l'email de vérification
     // atterrit parfois en spam ; WhatsApp offre un deuxième canal indépendant et immédiat.
+    let whatsappSent = false;
     if (user.phone) {
       const otpMessageFr = `🔐 GHULABE — Votre code de vérification est : ${otp} (valable 5 minutes). Ne le partagez avec personne.`;
       try {
         await sendWhatsAppAlert(user.phone, otpMessageFr, user.id, ip);
+        whatsappSent = true;
       } catch (waErr: any) {
         console.warn('[GHULABE Auth] Envoi OTP WhatsApp échoué (email reste le canal principal):', waErr.message);
       }
     }
 
-    if (process.env.NODE_ENV === 'production' && !emailSent) {
+    // On ne bloque la connexion que si TOUS les canaux disponibles ont échoué.
+    // Avant ce correctif, un échec d'email bloquait la connexion même quand le
+    // code était bien arrivé par WhatsApp — l'utilisateur restait coincé sans
+    // aucun moyen de se connecter alors qu'il avait reçu son code.
+    const anyChannelSucceeded = emailSent || whatsappSent;
+
+    if (process.env.NODE_ENV === 'production' && !anyChannelSucceeded) {
       generateAuditLog({
         action: 'LOGIN_STEP1_EMAIL_FAILED',
         userId: user.id,
         ipAddress: ip,
         status: 'FAILED',
-        details: `Mot de passe validé mais échec d'envoi de l'email 2FA (${email}). Connexion bloquée par sécurité.`,
+        details: `Mot de passe validé mais échec d'envoi du code 2FA par email ET WhatsApp (${email}). Connexion bloquée par sécurité.`,
       });
       pending2FAChallenges.delete(challengeId);
       res.status(500).json({
@@ -263,7 +271,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   } catch (err: any) {
     res.status(500).json({ error_fr: "Erreur lors de la connexion.", details: err.message });
   }
-      }
+}
 export async function verify2FA(req: Request, res: Response): Promise<void> {
   const { challengeId, otp } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
@@ -480,4 +488,4 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   } catch (err: any) {
     res.status(500).json({ error_fr: "Erreur lors de la réinitialisation.", details: err.message });
   }
-      }
+        }
