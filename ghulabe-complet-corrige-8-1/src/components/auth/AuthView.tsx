@@ -28,7 +28,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
   const [fullName, setFullName] = useState('');
   const [country, setCountry] = useState('Gabon');
   const [otp, setOtp] = useState('');
-  const [challengeId, setChallengeId] = useState('');
+  const [challengeId] = useState('');
   const [devNote, setDevNote] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [resetId, setResetId] = useState('');
@@ -54,14 +54,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
         setMode('login');
         setPassword('');
       } else {
-        const { challengeId: newChallengeId, devNote: note } = await GhulabeBackend.loginStep1(email, password);
-        setChallengeId(newChallengeId);
-        setDevNote(note || '');
-        setStep('otp');
+        const { accessToken, user } = await GhulabeBackend.login(email, password);
         setSuccessMsg(lang === 'fr'
-          ? "📧 Code de vérification envoyé par email. Saisissez-le ci-dessous."
-          : "📧 Verification code sent by email. Enter it below."
+          ? "✅ Connexion réussie."
+          : "✅ Login successful."
         );
+        onLoginSuccess(accessToken, user);
       }
     } catch (err: any) {
       setErrorMsg(err.message || (lang === 'fr' ? "Erreur d'authentification." : "Authentication error."));
