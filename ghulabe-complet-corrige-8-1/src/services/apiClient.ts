@@ -8,11 +8,11 @@ const API_BASE_URL = (import.meta && import.meta.env && import.meta.env.VITE_API
  * Interface frontend pour communiquer avec le Backend GHULABE (Render / Supabase EU)
  */
 export const GhulabeBackend = {
-  async loginStep1(email: string, passwordHash: string): Promise<{ challengeId: string; devNote?: string }> {
+  async login(email: string, password: string): Promise<{ accessToken: string; user: any }> {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: passwordHash }),
+      body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
