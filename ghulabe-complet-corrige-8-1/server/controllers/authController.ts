@@ -4,8 +4,7 @@ import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '../config/supabase';
 import { decryptAES256, generateAuditLog } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
-import { sendOtpEmail, sendPasswordResetEmail } from '../services/emailService';
-import { sendWhatsAppAlert } from '../services/whatsappService';
+import { sendPasswordResetEmail } from '../services/emailService';
 import { isValidEmail } from '../utils/validators';
 
 const pending2FAChallenges = new Map<string, { userId: string; email: string; role: string; plan: string; otp: string; expiresAt: number; attempts: number }>();
@@ -109,7 +108,7 @@ function isBcryptHash(value: string): boolean {
   return /^\$2[aby]\$/.test(value);
 }
 export async function login(req: Request, res: Response): Promise<void> {
-  const { email, password, lang } = req.body;
+  const { email, password } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
   if (!email || !password) {
@@ -198,75 +197,35 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     failedLoginAttempts.delete(email);
 
-    const otp = process.env.NODE_ENV === 'production' ? Math.floor(100000 + Math.random() * 900000).toString() : '2026';
-    const challengeId = `2fa-${Date.now()}`;
-
-    pending2FAChallenges.set(challengeId, {
-      userId: user.id,
+    // Connexion directe : mot de passe correct = accès immédiat. La 2FA par
+    // email/WhatsApp a été retirée du parcours de connexion — elle dépendait
+    // de l'envoi effectif d'un code (email non livrable sans domaine vérifié
+    // sur Resend, WhatsApp limité au mode sandbox Twilio), ce qui bloquait
+    // des clients légitimes qui avaient pourtant le bon mot de passe.
+    const userPayload = {
+      id: user.id,
       email: user.email,
-      role: user.role,
-      plan: user.plan,
-      otp,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      attempts: 0,
-    });
+      role: user.role as 'user' | 'dev' | 'admin',
+      plan: user.plan as 'gratuit' | 'gardien' | 'pentest_premium',
+      is2faVerified: true,
+    };
 
-    const emailSent = await sendOtpEmail(email, otp, lang === 'en' ? 'en' : 'fr', user.id, ip);
-
-    // Duplication du code OTP par WhatsApp en plus de l'email — l'email de vérification
-    // atterrit parfois en spam ; WhatsApp offre un deuxième canal indépendant et immédiat.
-    let whatsappSent = false;
-    if (user.phone) {
-      const otpMessageFr = `🔐 GHULABE — Votre code de vérification est : ${otp} (valable 5 minutes). Ne le partagez avec personne.`;
-      try {
-        await sendWhatsAppAlert(user.phone, otpMessageFr, user.id, ip);
-        whatsappSent = true;
-      } catch (waErr: any) {
-        console.warn('[GHULABE Auth] Envoi OTP WhatsApp échoué (email reste le canal principal):', waErr.message);
-      }
-    }
-
-    // On ne bloque la connexion que si TOUS les canaux disponibles ont échoué.
-    // Avant ce correctif, un échec d'email bloquait la connexion même quand le
-    // code était bien arrivé par WhatsApp — l'utilisateur restait coincé sans
-    // aucun moyen de se connecter alors qu'il avait reçu son code.
-    const anyChannelSucceeded = emailSent || whatsappSent;
-
-    if (process.env.NODE_ENV === 'production' && !anyChannelSucceeded) {
-      generateAuditLog({
-        action: 'LOGIN_STEP1_EMAIL_FAILED',
-        userId: user.id,
-        ipAddress: ip,
-        status: 'FAILED',
-        details: `Mot de passe validé mais échec d'envoi du code 2FA par email ET WhatsApp (${email}). Connexion bloquée par sécurité.`,
-      });
-      pending2FAChallenges.delete(challengeId);
-      res.status(500).json({
-        error_fr: "Impossible d'envoyer le code de vérification. Veuillez réessayer plus tard ou contacter le support.",
-        error_en: "Unable to send verification code. Please try again later or contact support.",
-      });
-      return;
-    }
+    const accessToken = signAccessToken(userPayload);
 
     generateAuditLog({
-      action: 'LOGIN_STEP1_SUCCESS_2FA_SENT',
+      action: 'LOGIN_FULL_SUCCESS_JWT_ISSUED',
       userId: user.id,
       ipAddress: ip,
       status: 'SUCCESS',
-      details: `Mot de passe validé. Code 2FA ${emailSent ? 'envoyé par email' : 'NON envoyé (SMTP non configuré, mode dev)'} (${email}).`,
+      details: `Connexion directe réussie (${email}). Token JWT émis (expiration 24h).`,
     });
 
     res.status(200).json({
-      message_fr: emailSent
-        ? "Étape 1 réussie. Un code 2FA a été envoyé par email pour confirmer votre identité."
-        : "Étape 1 réussie. Code 2FA généré (email non envoyé : SMTP non configuré, environnement de développement).",
-      message_en: emailSent
-        ? "Step 1 passed. A 2FA verification code was sent via email."
-        : "Step 1 passed. Code generated (email not sent: SMTP not configured, dev environment).",
-      challengeId,
-      expiresInSeconds: 300,
-      emailSent,
-      devNote: process.env.NODE_ENV !== 'production' ? `Code 2FA de test : "${otp}"` : undefined,
+      message_fr: "Connexion réussie. Session sécurisée active (expiration sous 24h).",
+      message_en: "Login successful. Secure session active (24h expiry).",
+      accessToken,
+      expiresIn: '24h',
+      user: userPayload,
     });
   } catch (err: any) {
     res.status(500).json({ error_fr: "Erreur lors de la connexion.", details: err.message });
@@ -285,9 +244,7 @@ export async function verify2FA(req: Request, res: Response): Promise<void> {
   if (!challenge || Date.now() > challenge.expiresAt) {
     res.status(401).json({ error_fr: "Challenge 2FA expiré ou invalide. Veuillez vous reconnecter." });
     return;
-  }
-
-  if (challenge.attempts >= 5) {
+        }if (challenge.attempts >= 5) {
     pending2FAChallenges.delete(challengeId);
     res.status(429).json({ error_fr: "Trop de tentatives incorrectes. Veuillez vous reconnecter." });
     return;
@@ -488,4 +445,4 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   } catch (err: any) {
     res.status(500).json({ error_fr: "Erreur lors de la réinitialisation.", details: err.message });
   }
-        }
+                          }
