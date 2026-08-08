@@ -1,18 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Language, TabType, User, Domain } from './types';
 import { Header } from './components/common/Header';
 import { Footer } from './components/common/Footer';
 import { BottomNav } from './components/common/BottomNav';
 import { SecurityHeadersBanner } from './components/common/SecurityHeadersBanner';
 import { HomeView } from './components/home/HomeView';
-import { ScanView } from './components/scan/ScanView';
-import { DashboardView } from './components/dash/DashboardView';
-import { DevsPortalView } from './components/devs/DevsPortalView';
-import { MeView } from './components/me/MeView';
-import { LegalModal } from './components/legal/LegalModal';
 import { AuthView, BackendAuthUser } from './components/auth/AuthView';
 import { GhulabeBackend } from './services/apiClient';
 import { PaymentModal } from './components/common/PaymentModal';
+
+// Vues chargées à la demande (uniquement quand l'onglet correspondant est ouvert),
+// pour réduire le JavaScript envoyé au premier chargement de la page.
+const ScanView = lazy(() => import('./components/scan/ScanView').then(m => ({ default: m.ScanView })));
+const DashboardView = lazy(() => import('./components/dash/DashboardView').then(m => ({ default: m.DashboardView })));
+const DevsPortalView = lazy(() => import('./components/devs/DevsPortalView').then(m => ({ default: m.DevsPortalView })));
+const MeView = lazy(() => import('./components/me/MeView').then(m => ({ default: m.MeView })));
+const LegalModal = lazy(() => import('./components/legal/LegalModal').then(m => ({ default: m.LegalModal })));
+
+const ViewLoadingFallback: React.FC = () => (
+  <div className="flex items-center justify-center py-24">
+    <div className="w-8 h-8 border-2 border-[#0066FF] border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 export const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('fr');
@@ -208,16 +217,18 @@ export const App: React.FC = () => {
 
         {activeTab === 'scan' && (
           sessionUser ? (
-            <ScanView
-              lang={lang}
-              accessToken={accessToken || undefined}
-              initialUrl={scanTargetUrl}
-              initialScanActive={isScanAutoStarted}
-              setActiveTab={setActiveTab}
-              onScanComplete={() => {
-                setIsScanAutoStarted(false);
-              }}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <ScanView
+                lang={lang}
+                accessToken={accessToken || undefined}
+                initialUrl={scanTargetUrl}
+                initialScanActive={isScanAutoStarted}
+                setActiveTab={setActiveTab}
+                onScanComplete={() => {
+                  setIsScanAutoStarted(false);
+                }}
+              />
+            </Suspense>
           ) : (
             <div className="max-w-md mx-auto py-12 px-4 space-y-6">
               <p className="text-center text-gray-300 text-sm">
@@ -234,34 +245,40 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'dash' && (
-          <DashboardView
-            lang={lang}
-            currentUser={sessionUser || currentUser}
-            accessToken={accessToken || undefined}
-            domains={domains}
-            onAddDomain={handleAddMonitoredDomain}
-            setActiveTab={setActiveTab}
-            onSelectPlan={handleUpgradePlan}
-          />
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <DashboardView
+              lang={lang}
+              currentUser={sessionUser || currentUser}
+              accessToken={accessToken || undefined}
+              domains={domains}
+              onAddDomain={handleAddMonitoredDomain}
+              setActiveTab={setActiveTab}
+              onSelectPlan={handleUpgradePlan}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'devs' && (
-          <DevsPortalView
-            lang={lang}
-            initialMode={devPortalMode}
-            accessToken={accessToken || undefined}
-          />
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <DevsPortalView
+              lang={lang}
+              initialMode={devPortalMode}
+              accessToken={accessToken || undefined}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'me' && (
           sessionUser ? (
-            <MeView
-              lang={lang}
-              currentUser={sessionUser}
-              accessToken={accessToken || undefined}
-              onLogout={handleLogout}
-              onOpenLegal={(page) => setLegalPage(page)}
-            />
+            <Suspense fallback={<ViewLoadingFallback />}>
+              <MeView
+                lang={lang}
+                currentUser={sessionUser}
+                accessToken={accessToken || undefined}
+                onLogout={handleLogout}
+                onOpenLegal={(page) => setLegalPage(page)}
+              />
+            </Suspense>
           ) : (
             <div className="space-y-6">
               <AuthView
@@ -282,11 +299,13 @@ export const App: React.FC = () => {
         )}
 
         {/* Legal Modal Component */}
-        <LegalModal
-          lang={lang}
-          page={legalPage}
-          onClose={() => setLegalPage(null)}
-        />
+        <Suspense fallback={null}>
+          <LegalModal
+            lang={lang}
+            page={legalPage}
+            onClose={() => setLegalPage(null)}
+          />
+        </Suspense>
 
         {pendingPlan && accessToken && (
           <PaymentModal
