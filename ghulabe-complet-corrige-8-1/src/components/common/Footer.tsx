@@ -1,9 +1,8 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Language } from '../../types';
 import { getT } from '../../data/i18n';
 import { Logo3DEye } from './Logo3DEye';
-import { ShieldAlert, Server, Lock, FileCheck, BookOpen } from 'lucide-react';
+import { ShieldAlert, Server, Lock, FileCheck } from 'lucide-react';
 
 interface FooterProps {
   lang: Language;
@@ -35,13 +34,6 @@ export const Footer: React.FC<FooterProps> = ({ lang, onOpenLegal }) => {
             <h4 className="font-display font-bold text-white text-sm tracking-wider uppercase mb-1">
               Conformité & Juridique
             </h4>
-            <Link
-              to="/blog"
-              className="text-left text-xs hover:text-[#0066FF] transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-[#0066FF]" />
-              <span>Blog</span>
-            </Link>
             <button
               onClick={() => onOpenLegal('mentions')}
               className="text-left text-xs hover:text-[#0066FF] transition-colors cursor-pointer flex items-center gap-1.5"
