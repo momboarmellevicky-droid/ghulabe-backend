@@ -5,7 +5,7 @@ import { GhulabeBackend } from '../../services/apiClient';
 import { 
   Terminal, AlertOctagon, CheckSquare, Square, CheckCircle2, 
   Copy, Check, FileDown, Lock, Code2, Cpu, Globe, 
-  UserCheck
+  UserCheck, ArrowLeft
 } from 'lucide-react';
 
 interface ScanViewProps {
@@ -127,7 +127,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
       return;
     }
     setIsDownloadingPdf(true);
-    window.open(currentResult.report_pdf_url, '_blank');
+    window.open(currentResult.report_pdf_url, '_blank', 'noopener,noreferrer');
     setIsDownloadingPdf(false);
   };
 
@@ -365,6 +365,14 @@ export const ScanView: React.FC<ScanViewProps> = ({
               >
                 <UserCheck className="w-5 h-5 text-[#0066FF]" />
                 <span>{lang === 'fr' ? "Missionner un Dev Certifié" : "Hire Certified Dev"}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('home')}
+                className="w-full sm:w-auto px-5 py-4 rounded-xl bg-transparent hover:bg-white/5 text-gray-300 hover:text-white font-display font-bold text-sm flex items-center justify-center gap-2 border border-white/15 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span>{lang === 'fr' ? "Retour à l'accueil" : "Back to home"}</span>
               </button>
             </div>
           </div>

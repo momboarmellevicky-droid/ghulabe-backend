@@ -86,6 +86,14 @@ export const App: React.FC = () => {
       : "GHULABE — 1st bilingual cybersecurity platform for African SMEs";
   }, [lang]);
 
+  // Remonte systématiquement en haut de page à chaque changement d'onglet, pour que
+  // chaque interface (Accueil, Scan, Tableau de bord, Développeurs, Mon compte) démarre
+  // toujours visible dès son ouverture, sans hériter de la position de défilement de
+  // l'interface précédente.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [activeTab]);
+
   // Réhydrate la session au chargement à partir du JWT backend stocké en local (s'il existe et
   // n'est pas expiré). On décode uniquement le payload (pas de vérification de signature côté
   // client — inutile ici : chaque appel API réel est de toute façon revérifié par requireAuth()
