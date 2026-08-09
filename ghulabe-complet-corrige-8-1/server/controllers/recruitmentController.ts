@@ -52,6 +52,18 @@ export async function getRecruitmentPaymentStatus(req: Request, res: Response): 
 
 import { supabaseAdmin } from '../config/supabase';
 import crypto from 'crypto';
+import { sendAdminRecruitmentAlertEmail } from '../services/emailService';
+import { sendWhatsAppAlert } from '../services/whatsappService';
+
+// Alerte temps réel vers TON email + TON WhatsApp (pas ceux du candidat) —
+// ADMIN_EMAIL et ADMIN_WHATSAPP_E164 à configurer dans les variables d'env Render.
+async function notifyAdmin(eventLabel: string, candidateEmail: string, detailsText: string, ip: string): Promise<void> {
+  await sendAdminRecruitmentAlertEmail(eventLabel, candidateEmail, detailsText, 'admin-notify', ip);
+  const adminPhone = process.env.ADMIN_WHATSAPP_E164;
+  if (adminPhone) {
+    await sendWhatsAppAlert(adminPhone, `🔔 GHULABE\n${eventLabel}\nCandidat: ${candidateEmail}\n${detailsText}`, 'admin-notify', ip);
+  }
+}
 
 const ALLOWED_PHOTO_KINDS = ['id_document', 'liveness', 'qcm_snapshot'] as const;
 type PhotoKind = typeof ALLOWED_PHOTO_KINDS[number];
@@ -118,9 +130,41 @@ export async function uploadVerificationPhoto(req: Request, res: Response): Prom
     }
 
     res.status(200).json({ success: true });
+
+    // Alerte temps réel — uniquement pour identité et liveness (pas les captures QCM répétées, pour éviter le spam)
+    if (kind === 'id_document') {
+      await notifyAdmin('📄 Document d\'identité uploadé', email, 'Un candidat a soumis sa pièce d\'identité.', req.ip || 'unknown-ip');
+    } else if (kind === 'liveness') {
+      await notifyAdmin('🤳 Selfie de vérification (liveness) soumis', email, 'Preuve de vie capturée pour ce candidat.', req.ip || 'unknown-ip');
+    }
   } catch (err: any) {
     res.status(500).json({ error_fr: `Erreur serveur: ${err.message || 'inconnue'}` });
   }
+}
+
+/**
+ * Fin de test QCM — reçoit le score final et déclenche une alerte temps réel
+ * vers l'admin (email + WhatsApp), avec mention spéciale si score suspect (100%).
+ */
+export async function notifyTestCompleted(req: Request, res: Response): Promise<void> {
+  const { email, scorePercentage, passed } = req.body as {
+    email: string;
+    scorePercentage: number;
+    passed: boolean;
+  };
+
+  if (!email || typeof scorePercentage !== 'number') {
+    res.status(400).json({ error_fr: "Champs requis manquants (email, scorePercentage)." });
+    return;
+  }
+
+  res.status(200).json({ success: true });
+
+  const suspicious = scorePercentage === 100;
+  const label = passed ? '✅ Test QCM terminé — RÉUSSI' : '❌ Test QCM terminé — ÉCHOUÉ';
+  const details = `Score : ${scorePercentage}%.` + (suspicious ? ' ⚠️ Score parfait — à vérifier manuellement.' : '');
+
+  await notifyAdmin(label, email, details, req.ip || 'unknown-ip');
 }
 
 export async function getVerificationPhotos(req: Request, res: Response): Promise<void> {

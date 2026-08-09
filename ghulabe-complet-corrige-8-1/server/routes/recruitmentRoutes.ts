@@ -4,6 +4,7 @@ import {
   getRecruitmentPaymentStatus,
   uploadVerificationPhoto,
   getVerificationPhotos,
+  notifyTestCompleted,
 } from '../controllers/recruitmentController';
 import { requireAuth, requireAdmin } from '../middleware/authMiddleware';
 import { apiRateLimiter } from '../middleware/rateLimiter';
@@ -18,6 +19,9 @@ router.get('/status/:transactionId', apiRateLimiter, getRecruitmentPaymentStatus
 // Vérification anti-triche RÉELLE (document d'identité + preuve de vie + captures QCM) —
 // pas d'auth requise non plus : le candidat n'a pas encore de compte à ce stade.
 router.post('/verification-photo', apiRateLimiter, uploadVerificationPhoto);
+
+// Alerte admin temps réel à la fin d'un test QCM (email + WhatsApp)
+router.post('/test-completed', apiRateLimiter, notifyTestCompleted);
 
 // Consultation des photos par un admin (pour validation manuelle du candidat)
 router.get('/verification-photos/:email', requireAuth, requireAdmin, apiRateLimiter, getVerificationPhotos);

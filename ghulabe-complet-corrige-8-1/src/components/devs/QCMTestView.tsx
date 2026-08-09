@@ -198,6 +198,13 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
       }
     }
 
+    // Alerte temps réel vers l'admin (email + WhatsApp) — n'attend pas la réponse
+    fetch('/api/recruitment/test-completed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: candidateEmail, scorePercentage: pct, passed }),
+    }).catch(() => { /* échec silencieux, ne bloque jamais le candidat */ });
+
     onFinishTest(pct, passed, photosTaken);
   };
 

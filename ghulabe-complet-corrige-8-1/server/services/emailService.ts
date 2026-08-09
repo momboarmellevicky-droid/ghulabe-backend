@@ -263,6 +263,86 @@ export async function sendScanReportEmail(
     return false;
   }
         }
+/**
+ * Alerte admin (Mombo Armelle Vicky) envoyée en temps réel à chaque mouvement
+ * du parcours recrutement développeur : upload document identité, selfie
+ * liveness, ou fin de test QCM. Destinée à ADMIN_EMAIL, pas au candidat.
+ */
+export async function sendAdminRecruitmentAlertEmail(
+  eventLabel: string,
+  candidateEmail: string,
+  detailsText: string,
+  userId: string,
+  ip: string
+): Promise<boolean> {
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+  if (!RESEND_API_KEY || !ADMIN_EMAIL) {
+    generateAuditLog({
+      action: 'EMAIL_ADMIN_ALERT_SKIPPED',
+      userId,
+      ipAddress: ip,
+      status: 'BLOCKED',
+      details: `Alerte admin ignorée (RESEND_API_KEY ou ADMIN_EMAIL non configuré) — événement: ${eventLabel} / ${candidateEmail}.`,
+    });
+    return false;
+  }
+
+  const subject = `🔔 GHULABE Recrutement — ${eventLabel} (${candidateEmail})`;
+  const text = `${eventLabel}\nCandidat : ${candidateEmail}\n${detailsText}`;
+  const html = `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;">
+    <h2 style="color:#0066FF;">🔔 ${eventLabel}</h2>
+    <p>Candidat : <strong>${candidateEmail}</strong></p>
+    <p style="color:#9CA3AF;">${detailsText}</p>
+  </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+        to: [ADMIN_EMAIL],
+        subject,
+        html,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      generateAuditLog({
+        action: 'EMAIL_ADMIN_ALERT_FAILED',
+        userId,
+        ipAddress: ip,
+        status: 'FAILED',
+        details: `Échec envoi alerte admin (${eventLabel}) : ${res.status} ${errorBody}`,
+      });
+      return false;
+    }
+
+    generateAuditLog({
+      action: 'EMAIL_ADMIN_ALERT_SENT',
+      userId,
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: `Alerte admin envoyée (${eventLabel}) pour ${candidateEmail}.`,
+    });
+    return true;
+  } catch (err: any) {
+    generateAuditLog({
+      action: 'EMAIL_ADMIN_ALERT_FAILED',
+      userId,
+      ipAddress: ip,
+      status: 'FAILED',
+      details: `Erreur critique alerte admin (${eventLabel}) : ${err.message}`,
+    });
+    return false;
+  }
+}
+
 export async function sendPasswordResetEmail(
   toEmail: string,
   otp: string,

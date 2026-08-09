@@ -171,3 +171,4 @@ export interface Alert {
   message_en: string;
   is_read: boolean;
   created_at: string;
+}
