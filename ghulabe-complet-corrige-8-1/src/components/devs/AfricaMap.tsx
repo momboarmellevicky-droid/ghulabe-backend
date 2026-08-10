@@ -67,15 +67,19 @@ export const AfricaMap: React.FC<AfricaMapProps> = ({
         viewBox="0 0 100 100"
         className="w-full h-full drop-shadow-[0_0_20px_rgba(0,102,255,0.25)] select-none"
       >
-        {/* Silhouette du continent, plus fidèle qu'un simple polygone */}
+        {/* Silhouette réaliste du continent africain — Corne de l'Afrique à l'est,
+            golfe de Guinée en creux, pointe du Cap de Bonne-Espérance au sud */}
         <path
-          d="M 30 12 L 45 10 L 58 15 L 70 22 L 85 38 L 90 48 L 82 52 L 78 60 L 72 78 L 62 90 L 52 94 L 46 82 L 40 75 L 44 62 L 38 58 L 30 55 L 20 50 L 14 42 L 12 34 L 18 26 L 24 20 Z"
+          d="M 33 6 L 47 5 L 60 8 L 70 14 L 79 22 L 87 33 L 92 41 L 91 46 L 85 44 L 81 48 L 79 55 L 76 63 L 72 71 L 66 80 L 58 89 L 51 96 L 46 91 L 44 82 L 42 72 L 45 62 L 48 56 L 43 51 L 37 53 L 30 50 L 22 45 L 14 38 L 9 30 L 7 22 L 13 16 L 21 11 L 27 8 Z"
           fill="#0D1B2A"
           stroke="#0066FF"
           strokeWidth="0.7"
           strokeOpacity="0.5"
           className="transition-all duration-300"
         />
+
+        {/* Madagascar */}
+        <ellipse cx="83" cy="68" rx="2.2" ry="6" fill="#0D1B2A" stroke="#0066FF" strokeWidth="0.5" strokeOpacity="0.4" transform="rotate(15 83 68)" />
 
         {/* Zone CEMAC (Afrique Centrale) — surlignage doré */}
         <path
