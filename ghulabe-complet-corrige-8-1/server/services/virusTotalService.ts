@@ -82,7 +82,7 @@ export async function checkUrlReputation(
       return notChecked;
     }
 
-    const data = await res.json();
+    const data: any = await res.json();
     const stats = data?.data?.attributes?.last_analysis_stats;
     if (!stats) return notChecked;
 
