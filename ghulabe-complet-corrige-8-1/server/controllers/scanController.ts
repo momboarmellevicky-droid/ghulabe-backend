@@ -8,6 +8,7 @@ import { generateScanReportPdf } from '../services/pdfReportService';
 import { sendWhatsAppAlert } from '../services/whatsappService';
 import { sendScanReportEmail } from '../services/emailService';
 import { isValidEmail, isValidPhoneNumber } from '../utils/validators';
+import { checkUrlReputation } from '../services/virusTotalService';
 /**
  * Calcule un score de sécurité sur 10 à partir des faits réels du scan
  * (headers manquants, SSL invalide/expirant, fichiers exposés, gravité des
@@ -88,6 +89,28 @@ export async function startScan(req: Request, res: Response): Promise<void> {
 
     // 2. Analyse IA Gemini à partir des faits réels (jamais de faille inventée hors faits constatés)
     const findings = await generateFindingsFromScan(facts, userId || 'ANONYMOUS', ip);
+
+    // 2b. Vérification de réputation VirusTotal (détection phishing/malveillance connue)
+    const reputation = await checkUrlReputation(cleanUrl, userId || 'ANONYMOUS', ip);
+    if (reputation.checked && reputation.flagged) {
+      findings.unshift({
+        id: `vt-${Date.now()}`,
+        title_fr: 'Domaine signalé comme malveillant par la communauté sécurité',
+        title_en: 'Domain flagged as malicious by the security community',
+        severity: 'critique',
+        category: 'reputation',
+        ceo_impact_fr: `Ce domaine est signalé par ${reputation.malicious} moteur(s) de sécurité comme malveillant ou par ${reputation.suspicious} comme suspect (base VirusTotal). Les visiteurs et navigateurs peuvent bloquer ou avertir avant l'accès à ce site.`,
+        ceo_impact_en: `This domain is flagged by ${reputation.malicious} security engine(s) as malicious or ${reputation.suspicious} as suspicious (VirusTotal). Visitors and browsers may block or warn before accessing this site.`,
+        financial_risk_fr: 'Perte de confiance client, blocage par les navigateurs, impact direct sur les ventes et la réputation de la marque.',
+        financial_risk_en: 'Loss of customer trust, browser blocking, direct impact on sales and brand reputation.',
+        urgency_fr: 'Action immédiate requise : vérifier une compromission du site et demander un ré-examen auprès de VirusTotal une fois le problème résolu.',
+        urgency_en: 'Immediate action required: check for site compromise and request re-review from VirusTotal once resolved.',
+        tech_details_fr: `Score VirusTotal : ${reputation.malicious} malveillant(s) / ${reputation.suspicious} suspect(s) / ${reputation.harmless} sain(s) sur l'ensemble des moteurs interrogés.`,
+        tech_details_en: `VirusTotal score: ${reputation.malicious} malicious / ${reputation.suspicious} suspicious / ${reputation.harmless} harmless across all engines queried.`,
+        remediation_code: '',
+        remediation_lang: '',
+      });
+    }
 
     const score = computeSecurityScore(facts.headers_checked, facts.ssl_status, facts.exposed_files.length, findings);
     const durationSeconds = Math.round(facts.duration_ms / 1000);
