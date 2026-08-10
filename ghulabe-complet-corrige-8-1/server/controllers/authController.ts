@@ -29,11 +29,11 @@ setInterval(() => {
 }, 60 * 1000);
 
 export async function register(req: Request, res: Response): Promise<void> {
-  const { email, password, name, country, role = 'user', plan = 'gratuit', specialites = [], city, bio, rateFcfa, portfolioUrl } = req.body;
+  const { email, password, name, country, phone, role = 'user', plan = 'gratuit', specialites = [], city, bio, rateFcfa, portfolioUrl } = req.body;
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
-  if (!email || !password || !name || !country) {
-    res.status(400).json({ error_fr: "Tous les champs obligatoires doivent être renseignés." });
+  if (!email || !password || !name || !country || !phone) {
+    res.status(400).json({ error_fr: "Tous les champs obligatoires doivent être renseignés (numéro WhatsApp inclus)." });
     return;
   }
 
@@ -57,6 +57,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       password_hash: passwordHash,
       name,
       country,
+      phone,
       role,
       plan,
       specialites: role === 'dev' ? specialites : [],

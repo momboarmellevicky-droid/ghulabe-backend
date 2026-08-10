@@ -106,11 +106,11 @@ export const GhulabeBackend = {
     }
   },
 
-  async register(email: string, password: string, name: string, country: string): Promise<{ userId: string }> {
+  async register(email: string, password: string, name: string, country: string, phone: string): Promise<{ userId: string }> {
     const res = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name, country }),
+      body: JSON.stringify({ email, password, name, country, phone }),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));

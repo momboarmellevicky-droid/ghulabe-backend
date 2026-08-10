@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GhulabeBackend } from '../../services/apiClient';
 import { Language } from '../../types';
-import { Lock, Mail, User, Globe, ArrowRight, CheckCircle2, AlertOctagon, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, User, Globe, ArrowRight, CheckCircle2, AlertOctagon, ShieldCheck, Eye, EyeOff, Smartphone } from 'lucide-react';
 
 // Forme du user renvoyé par verify2FA (server/controllers/authController.ts) : volontairement
 // plus restreinte que l'interface User complète (pas de name/country, non stockés dans le JWT).
@@ -26,6 +26,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('Gabon');
   const [otp, setOtp] = useState('');
   const [challengeId] = useState('');
@@ -46,7 +47,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
 
     try {
       if (mode === 'register') {
-        await GhulabeBackend.register(email, password, fullName || email.split('@')[0], country);
+        await GhulabeBackend.register(email, password, fullName || email.split('@')[0], country, phone);
         setSuccessMsg(lang === 'fr'
           ? "✅ Compte créé. Authentification 2FA obligatoire : connectez-vous maintenant."
           : "✅ Account created. 2FA is mandatory: please sign in now."
@@ -193,6 +194,26 @@ export const AuthView: React.FC<AuthViewProps> = ({ lang, onLoginSuccess }) => {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-mono text-gray-300 text-xs">
+                  {lang === 'fr' ? "Numéro WhatsApp" : "WhatsApp number"} *
+                </label>
+                <div className="relative">
+                  <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder="ex: +24177123456"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-gray-500 font-mono mt-1">
+                  {lang === 'fr' ? "Format international avec indicatif pays" : "International format with country code"}
+                </p>
               </div>
 
               <div className="space-y-1">
