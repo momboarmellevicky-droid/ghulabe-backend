@@ -8,6 +8,7 @@ import { HomeView } from './components/home/HomeView';
 import { AuthView, BackendAuthUser } from './components/auth/AuthView';
 import { GhulabeBackend } from './services/apiClient';
 import { PaymentModal } from './components/common/PaymentModal';
+import { SupportButton } from './components/common/SupportButton';
 import { DemoAutoPlayView } from './components/demo/DemoAutoPlayView';
 import { Play } from 'lucide-react';
 
@@ -334,6 +335,8 @@ export const App: React.FC = () => {
           }}
           lang={lang}
         />
+
+        <SupportButton lang={lang} />
 
       </main>
     </div>
