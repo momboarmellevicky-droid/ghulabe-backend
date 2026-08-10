@@ -8,6 +8,8 @@ import { HomeView } from './components/home/HomeView';
 import { AuthView, BackendAuthUser } from './components/auth/AuthView';
 import { GhulabeBackend } from './services/apiClient';
 import { PaymentModal } from './components/common/PaymentModal';
+import { DemoAutoPlayView } from './components/demo/DemoAutoPlayView';
+import { Play } from 'lucide-react';
 
 // Vues chargées à la demande (uniquement quand l'onglet correspondant est ouvert),
 // pour réduire le JavaScript envoyé au premier chargement de la page.
@@ -77,6 +79,7 @@ export const App: React.FC = () => {
   const [isScanAutoStarted, setIsScanAutoStarted] = useState(false);
   const [devPortalMode, setDevPortalMode] = useState<'find' | 'become'>('find');
   const [legalPage, setLegalPage] = useState<'mentions' | 'privacy' | 'cgu' | 'disclaimer' | 'cookies' | null>(null);
+  const [showAutoDemo, setShowAutoDemo] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<'gardien' | 'pentest_premium' | null>(null);
 
   // Set document title dynamically
@@ -282,10 +285,11 @@ export const App: React.FC = () => {
               <div className="text-center">
                 <button
                   type="button"
-                  onClick={() => setSessionUser(currentUser)}
-                  className="w-full mt-3 py-3 rounded-xl bg-[#00FF88]/15 border-2 border-[#00FF88] text-[#00FF88] font-display font-bold text-sm"
+                  onClick={() => setShowAutoDemo(true)}
+                  className="w-full mt-3 py-3 rounded-xl bg-[#00FF88]/15 border-2 border-[#00FF88] text-[#00FF88] font-display font-bold text-sm flex items-center justify-center gap-2"
                 >
-                  {lang === 'fr' ? '⚡ Mode démo : Se connecter en tant qu\'admin Mombo Armelle Vicky' : '⚡ Demo mode: Log in as admin Mombo Armelle Vicky'}
+                  <Play className="w-4 h-4" />
+                  {lang === 'fr' ? 'Voir la démo automatique de GHULABE' : 'Watch the GHULABE auto demo'}
                 </button>
               </div>
             </div>
@@ -300,6 +304,10 @@ export const App: React.FC = () => {
             onClose={() => setLegalPage(null)}
           />
         </Suspense>
+
+        {showAutoDemo && (
+          <DemoAutoPlayView lang={lang} onClose={() => setShowAutoDemo(false)} />
+        )}
 
         {pendingPlan && accessToken && (
           <PaymentModal
