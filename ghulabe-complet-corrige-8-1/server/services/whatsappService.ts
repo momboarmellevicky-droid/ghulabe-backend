@@ -17,7 +17,8 @@ export async function sendWhatsAppAlert(
   toPhoneE164: string,
   message: string,
   userId: string,
-  ip: string
+  ip: string,
+  mediaUrl?: string
 ): Promise<boolean> {
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_FROM) {
     generateAuditLog({
@@ -31,6 +32,15 @@ export async function sendWhatsAppAlert(
   }
 
   try {
+    const params = new URLSearchParams({
+      From: TWILIO_WHATSAPP_FROM,
+      To: `whatsapp:${toPhoneE164}`,
+      Body: message,
+    });
+    if (mediaUrl) {
+      params.append('MediaUrl', mediaUrl);
+    }
+
     const res = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
       {
@@ -39,11 +49,7 @@ export async function sendWhatsAppAlert(
           'Authorization': 'Basic ' + Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64'),
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({
-          From: TWILIO_WHATSAPP_FROM,
-          To: `whatsapp:${toPhoneE164}`,
-          Body: message,
-        }),
+        body: params,
       }
     );
 

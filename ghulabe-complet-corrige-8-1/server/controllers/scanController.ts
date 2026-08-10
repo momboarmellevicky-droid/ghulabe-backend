@@ -279,7 +279,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
           await sendScanReportEmail(contactEmail, cleanUrl, score, findings.length, reportPdfUrl, 'fr', 'ANONYMOUS', ip);
         }
         if (contactPhone && isValidPhoneNumber(contactPhone)) {
-          await sendWhatsAppAlert(contactPhone, summaryFr, 'ANONYMOUS', ip);
+          await sendWhatsAppAlert(contactPhone, summaryFr, 'ANONYMOUS', ip, reportPdfUrl || undefined);
         }
       } catch (notifyErr: any) {
         console.warn('[GHULABE Scan] Notification scan anonyme échouée:', notifyErr.message);
@@ -310,7 +310,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
             await sendScanReportEmail(gardienUser.email, cleanUrl, score, findings.length, reportPdfUrl, 'fr', userId, ip);
           }
           if (gardienUser.phone) {
-            await sendWhatsAppAlert(gardienUser.phone, summaryFr, userId, ip);
+            await sendWhatsAppAlert(gardienUser.phone, summaryFr, userId, ip, reportPdfUrl || undefined);
           }
         }
       } catch (notifyErr: any) {
