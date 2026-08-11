@@ -33,6 +33,18 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
 
   // 4 Sequential Recruitment Steps state
   const [recruitStep, setRecruitStep] = useState<1 | 2 | 3 | 4 | 'completed'>(1);
+
+  // Mode test développeur : une fois activé une seule fois via ?devtest=ghulabe2026,
+  // reste actif en permanence sur cet appareil (localStorage), pour ne plus dépendre
+  // de la présence du paramètre dans l'URL à chaque navigation.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('devtest') === 'ghulabe2026') {
+      localStorage.setItem('ghulabe_devtest_mode', '1');
+    }
+  }, []);
+  const isDevTestMode = new URLSearchParams(window.location.search).get('devtest') === 'ghulabe2026'
+    || localStorage.getItem('ghulabe_devtest_mode') === '1';
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -905,7 +917,7 @@ const handleStep2Pay = async () => {
       >
         {isProcessingPayment ? (lang === 'fr' ? 'Paiement en cours...' : 'Processing payment...') : t.step2Pay}
                 </button>
-                {new URLSearchParams(window.location.search).get('devtest') === 'ghulabe2026' && <button onClick={() => setRecruitStep(3)} style={{position:'fixed', bottom:80, right:10, zIndex:9999, background:'#FF6B00', color:'#fff', padding:'10px 16px', borderRadius:8, border:'2px solid #fff', fontSize:14, fontWeight:'bold', boxShadow:'0 0 10px rgba(0,0,0,0.6)'}}>DEV: skip→3</button>}
+                {isDevTestMode && <button onClick={() => setRecruitStep(3)} style={{position:'fixed', bottom:80, right:10, zIndex:9999, background:'#FF6B00', color:'#fff', padding:'10px 16px', borderRadius:8, border:'2px solid #fff', fontSize:14, fontWeight:'bold', boxShadow:'0 0 10px rgba(0,0,0,0.6)'}}>DEV: skip→3</button>}
               </div>
             </div>
           )}
