@@ -1,6 +1,16 @@
 import { Request, Response } from 'express';
 import { generateAuditLog } from '../utils/crypto';
 import { initiateMobileMoneyPayment, checkPaymentStatus, MobileMoneyOperator } from '../services/paymentService';
+import { sendAdminRecruitmentAlertEmail } from '../services/emailService';
+import { sendWhatsAppAlert } from '../services/whatsappService';
+
+async function notifyAdminPayment(eventLabel: string, userEmailOrId: string, detailsText: string, ip: string): Promise<void> {
+  await sendAdminRecruitmentAlertEmail(eventLabel, userEmailOrId, detailsText, 'admin-notify', ip);
+  const adminPhone = process.env.ADMIN_WHATSAPP_E164;
+  if (adminPhone) {
+    await sendWhatsAppAlert(adminPhone, `💰 GHULABE\n${eventLabel}\nClient: ${userEmailOrId}\n${detailsText}`, 'admin-notify', ip);
+  }
+}
 
 export async function startPayment(req: Request, res: Response): Promise<void> {
   const { amount, phoneNumber, operator, reference, description } = req.body;
@@ -84,6 +94,16 @@ export async function getPaymentStatus(req: Request, res: Response): Promise<voi
 
   try {
     const result = await checkPaymentStatus(transactionId, userId, ip);
+
+    if (result.status === 'success') {
+      await notifyAdminPayment(
+        '💰 Paiement SingPay confirmé (Gabon)',
+        userId,
+        `Transaction: ${transactionId}`,
+        ip
+      );
+    }
+
     res.status(200).json(result);
   } catch (err: any) {
     res.status(500).json({ error_fr: "Erreur lors de la vérification du statut.", details: err.message });

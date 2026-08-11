@@ -2,6 +2,16 @@ import { Request, Response } from 'express';
 import { generateAuditLog } from '../utils/crypto';
 import { initiatePawaPayDeposit, checkPawaPayStatus } from '../services/pawapayService';
 import { supabaseAdmin } from '../config/supabase';
+import { sendAdminRecruitmentAlertEmail } from '../services/emailService';
+import { sendWhatsAppAlert } from '../services/whatsappService';
+
+async function notifyAdminPayment(eventLabel: string, userEmailOrId: string, detailsText: string, ip: string): Promise<void> {
+  await sendAdminRecruitmentAlertEmail(eventLabel, userEmailOrId, detailsText, 'admin-notify', ip);
+  const adminPhone = process.env.ADMIN_WHATSAPP_E164;
+  if (adminPhone) {
+    await sendWhatsAppAlert(adminPhone, `💰 GHULABE\n${eventLabel}\nClient: ${userEmailOrId}\n${detailsText}`, 'admin-notify', ip);
+  }
+}
 
 // Webhook appelé directement par PawaPay (pas d'authentification GHULABE possible ici,
 // c'est PawaPay qui nous notifie) — configuré dans le dashboard PawaPay → Callback URLs.
@@ -22,10 +32,21 @@ export async function handlePawaPayCallback(req: Request, res: Response): Promis
     });
 
     if (depositId) {
-      await supabaseAdmin
+      const { data: deposit } = await supabaseAdmin
         .from('pawapay_deposits')
         .update({ status, raw_callback: payload, updated_at: new Date().toISOString() })
-        .eq('deposit_id', depositId);
+        .eq('deposit_id', depositId)
+        .select('user_id, amount, currency, country, correspondent')
+        .maybeSingle();
+
+      if (status === 'COMPLETED' && deposit) {
+        await notifyAdminPayment(
+          '💰 Paiement PawaPay confirmé (zone CFA élargie)',
+          deposit.user_id,
+          `Pays: ${deposit.country} | Opérateur: ${deposit.correspondent} | Montant: ${deposit.amount} ${deposit.currency} | Deposit ID: ${depositId}`,
+          ip
+        );
+      }
     }
 
     // PawaPay attend un 200 pour ne pas renvoyer le callback en boucle
