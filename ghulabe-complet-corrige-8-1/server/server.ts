@@ -6,6 +6,7 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import certificationRoutes from './routes/certificationRoutes';
 import monitoringRoutes from './routes/monitoringRoutes';
 import paymentRoutes from './routes/paymentRoutes';
+import pawapayRoutes from './routes/pawapayRoutes';
 import recruitmentRoutes from './routes/recruitmentRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { apiRateLimiter } from './middleware/rateLimiter';
@@ -59,6 +60,7 @@ app.use('/api/cron', monitoringRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/public/certification', certificationRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/pawapay', pawapayRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 
