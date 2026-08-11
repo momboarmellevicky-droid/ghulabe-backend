@@ -224,9 +224,32 @@ const handleStep2Pay = async () => {
     if (!file) return;
     setUploadingDoc(true);
     try {
-      const reader = new FileReader();
+      // Compression côté app avant envoi : une photo de téléphone brute (souvent 3-8 Mo)
+      // dépasse la limite serveur de 5 Mo une fois encodée en base64 (+33%). On redimensionne
+      // et recompresse via canvas, comme pour le selfie liveness, pour éviter l'échec d'envoi.
       const imageBase64: string = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const MAX_DIM = 1600;
+            let { width, height } = img;
+            if (width > MAX_DIM || height > MAX_DIM) {
+              const scale = MAX_DIM / Math.max(width, height);
+              width = Math.round(width * scale);
+              height = Math.round(height * scale);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { reject(new Error('canvas context unavailable')); return; }
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.75));
+          };
+          img.onerror = reject;
+          img.src = reader.result as string;
+        };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
