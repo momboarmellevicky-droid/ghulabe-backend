@@ -2,6 +2,7 @@ import React from 'react';
 import { Language, TabType, User } from '../../types';
 import { getT } from '../../data/i18n';
 import { Logo3DEye } from './Logo3DEye';
+import { Mail3DIcon } from './Mail3DIcon';
 import { Shield, Globe, Terminal, UserCheck } from 'lucide-react';
 
 interface HeaderProps {
@@ -10,6 +11,7 @@ interface HeaderProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   currentUser: User;
+  isLoggedIn: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,7 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   setLang,
   activeTab,
   setActiveTab,
-  currentUser
+  currentUser,
+  isLoggedIn
 }) => {
   const t = getT(lang);
 
@@ -115,11 +118,15 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => setActiveTab('me')}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0D1B2A] hover:bg-[#152a42] border border-white/10 cursor-pointer transition-colors"
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#0066FF] to-[#00FF88] flex items-center justify-center text-xs font-bold text-[#0A0A0F]">
-              {currentUser.name.charAt(0)}
-            </div>
+            {isLoggedIn ? (
+              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#0066FF] to-[#00FF88] flex items-center justify-center text-xs font-bold text-[#0A0A0F]">
+                {currentUser.name.charAt(0)}
+              </div>
+            ) : (
+              <Mail3DIcon size={22} />
+            )}
             <span className="hidden sm:inline text-xs font-mono uppercase text-[#00FF88]">
-              {currentUser.plan}
+              {isLoggedIn ? currentUser.plan : (lang === 'fr' ? 'Connexion' : 'Log in')}
             </span>
           </div>
 

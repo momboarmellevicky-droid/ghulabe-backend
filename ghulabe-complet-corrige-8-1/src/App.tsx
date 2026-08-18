@@ -211,6 +211,7 @@ export const App: React.FC = () => {
           setActiveTab(tab);
         }}
         currentUser={sessionUser || currentUser}
+        isLoggedIn={!!sessionUser}
       />
 
       {/* Main Content Body */}
