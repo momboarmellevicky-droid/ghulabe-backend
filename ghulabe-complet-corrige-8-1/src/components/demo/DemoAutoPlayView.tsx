@@ -3,7 +3,8 @@ import { Language } from '../../types';
 import {
   Terminal, ShieldCheck, AlertOctagon, CheckSquare, Square, Globe,
   Mail, Lock, User, Smartphone, CheckCircle2, X, RotateCcw, Award,
-  CreditCard, FileText, Camera, ListChecks, ShieldAlert
+  CreditCard, FileText, Camera, ListChecks, ShieldAlert, Play, Pause,
+  ChevronLeft, ChevronRight, ShieldPlus
 } from 'lucide-react';
 
 interface DemoAutoPlayViewProps {
@@ -28,85 +29,99 @@ function useTypewriter(text: string, active: boolean, durationMs: number): strin
   return display;
 }
 
-// 0 = Accueil / Scanner (écran réel HomeView)
-// 1 = Créer un compte PME + activation GARDIEN (écran réel AuthView)
-// 2..5 = les 4 étapes réelles du portail développeur (DevsPortalView)
-// 6 = fin
-type Phase = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type PhaseId = 'scan' | 'resultat' | 'gardien' | 'dev1' | 'dev2' | 'dev3' | 'dev4' | 'connexion' | 'fin';
+
+interface PhaseConfig {
+  id: PhaseId;
+  durationMs: number;
+  thresholds: number[];
+}
+
+const PHASES: PhaseConfig[] = [
+  { id: 'scan',      durationMs: 7500,  thresholds: [1400, 2900, 3700, 4500, 5500] },
+  { id: 'resultat',  durationMs: 6000,  thresholds: [1800, 3600] },
+  { id: 'gardien',   durationMs: 9000,  thresholds: [2200, 4800, 7000] },
+  { id: 'dev1',      durationMs: 6000,  thresholds: [1200, 2500, 3800] },
+  { id: 'dev2',      durationMs: 6500,  thresholds: [1400, 3200, 5000] },
+  { id: 'dev3',      durationMs: 5500,  thresholds: [1400, 3200] },
+  { id: 'dev4',      durationMs: 5500,  thresholds: [1500, 3600] },
+  { id: 'connexion', durationMs: 4500,  thresholds: [1500, 3000] },
+  { id: 'fin',       durationMs: 999999, thresholds: [] },
+];
 
 const sampleUrls = ['ebanking-pme-africa.sn', 'boutique-dakar-store.sn', 'fintech-douala-pay.cm', 'assurances-libreville.ga'];
 
-export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClose }) => {
-  const [phase, setPhase] = useState<Phase>(0);
-  const [subStep, setSubStep] = useState(0);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+function formatTime(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
-  const clearAllTimers = () => { timers.current.forEach(clearTimeout); timers.current = []; };
-  const after = (ms: number, fn: () => void) => { timers.current.push(setTimeout(fn, ms)); };
+export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClose }) => {
+  const [phaseIndex, setPhaseIndex] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const t = (fr: string, en: string) => (lang === 'fr' ? fr : en);
-  const goTo = (p: Phase) => { setPhase(p); setSubStep(0); };
+  const phase = PHASES[phaseIndex];
+  const isLast = phaseIndex === PHASES.length - 1;
+
+  const subStep = phase.thresholds.filter(th => elapsedMs >= th).length;
+
+  const goToPhase = (idx: number) => {
+    setPhaseIndex(Math.max(0, Math.min(PHASES.length - 1, idx)));
+    setElapsedMs(0);
+  };
 
   useEffect(() => {
-    clearAllTimers();
-    if (phase === 0) {
-      after(1500, () => setSubStep(1));
-      after(3000, () => setSubStep(2));
-      after(3800, () => setSubStep(3));
-      after(5600, () => setSubStep(4));
-      after(8200, () => goTo(1));
-    } else if (phase === 1) {
-      after(1300, () => setSubStep(1));
-      after(2700, () => setSubStep(2));
-      after(4000, () => setSubStep(3));
-      after(5200, () => setSubStep(4));
-      after(7000, () => setSubStep(5));
-      after(9800, () => goTo(2));
-    } else if (phase === 2) {
-      after(1200, () => setSubStep(1));
-      after(2500, () => setSubStep(2));
-      after(3800, () => setSubStep(3));
-      after(5600, () => goTo(3));
-    } else if (phase === 3) {
-      after(1400, () => setSubStep(1));
-      after(3200, () => setSubStep(2));
-      after(5000, () => goTo(4));
-    } else if (phase === 4) {
-      after(1200, () => setSubStep(1));
-      after(2800, () => setSubStep(2));
-      after(4600, () => goTo(5));
-    } else if (phase === 5) {
-      after(1500, () => setSubStep(1));
-      after(3200, () => setSubStep(2));
-      after(5000, () => goTo(6));
-    }
-    return clearAllTimers;
+    if (tickRef.current) clearInterval(tickRef.current);
+    if (paused || isLast) return;
+    tickRef.current = setInterval(() => {
+      setElapsedMs(prev => {
+        const next = prev + 100;
+        if (next >= phase.durationMs) {
+          goToPhase(phaseIndex + 1);
+          return 0;
+        }
+        return next;
+      });
+    }, 100);
+    return () => { if (tickRef.current) clearInterval(tickRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phaseIndex, paused]);
 
-  const replay = () => { clearAllTimers(); goTo(0); };
+  const replay = () => { setPaused(false); goToPhase(0); };
 
-  const urlTyped = useTypewriter('ebanking-pme-africa.sn', phase === 0 && subStep === 0, 1300);
-  const nameTyped = useTypewriter('Mombo Armelle Vicky', phase === 1 && subStep === 0, 1200);
-  const waTyped = useTypewriter('+24177123456', phase === 1 && subStep === 1, 1000);
-  const emailTyped = useTypewriter('contact@entreprise.ga', phase === 1 && subStep === 2, 1300);
-  const devNameTyped = useTypewriter('Paul Moussavou', phase === 2 && subStep === 0, 1100);
-  const devEmailTyped = useTypewriter('p.moussavou@appsec-gabon.ga', phase === 2 && subStep === 1, 1300);
-  const portfolioTyped = useTypewriter('github.com/pmoussavou', phase === 3 && subStep === 0, 1200);
-  const bioTyped = useTypewriter(t('Consultant sécurité, spécialiste OWASP, 5 ans d\'expérience PME…', 'Security consultant, OWASP specialist, 5 years SME experience…'), phase === 3 && subStep === 1, 1600);
+  const urlTyped = useTypewriter('ebanking-pme-africa.sn', phase.id === 'scan' && subStep === 0, 1300);
+  const devNameTyped = useTypewriter('Paul Moussavou', phase.id === 'dev1' && subStep === 0, 1100);
+  const devEmailTyped = useTypewriter('p.moussavou@appsec-gabon.ga', phase.id === 'dev1' && subStep === 1, 1300);
+  const portfolioTyped = useTypewriter('github.com/pmoussavou', phase.id === 'dev2' && subStep === 0, 1200);
+  const bioTyped = useTypewriter(t('Consultant sécurité, spécialiste OWASP, 5 ans d\'expérience PME…', 'Security consultant, OWASP specialist, 5 years SME experience…'), phase.id === 'dev2' && subStep === 1, 1600);
+  const gardienPhoneTyped = useTypewriter('+24177123456', phase.id === 'gardien' && subStep === 1, 1100);
+  const loginEmailTyped = useTypewriter('contact@entreprise.ga', phase.id === 'connexion' && subStep === 0, 1200);
 
-  const stepDots = (total: number, current: number) => (
+  const stepDots = () => (
     <div className="flex items-center justify-center gap-1.5">
-      {Array.from({ length: total }).map((_, i) => (
-        <span key={i} className={`h-1.5 rounded-full transition-all ${i === current ? 'w-6 bg-[#0066FF]' : i < current ? 'w-1.5 bg-[#00FF88]' : 'w-1.5 bg-white/20'}`} />
+      {PHASES.slice(0, -1).map((p, i) => (
+        <span key={p.id} className={`h-1.5 rounded-full transition-all ${i === phaseIndex ? 'w-6 bg-[#0066FF]' : i < phaseIndex ? 'w-1.5 bg-[#00FF88]' : 'w-1.5 bg-white/20'}`} />
       ))}
     </div>
   );
 
   const phaseLabel = () => {
-    if (phase === 0) return t('Accueil — Scanner un site', 'Home — Scan a website');
-    if (phase === 1) return t('Créer un compte & activer GARDIEN', 'Create account & activate GARDIEN');
-    if (phase >= 2 && phase <= 5) return t(`Portail Développeurs — Étape ${phase - 1}/4`, `Developer Portal — Step ${phase - 1}/4`);
-    return t('Fin de la démo', 'Demo finished');
+    switch (phase.id) {
+      case 'scan': return t('Scène 1/8 — URL & lancement du scan', 'Scene 1/8 — URL & scan launch');
+      case 'resultat': return t('Scène 2/8 — Résultat du scan gratuit', 'Scene 2/8 — Free scan result');
+      case 'gardien': return t('Scène 3/8 — Activation du mode GARDIEN', 'Scene 3/8 — Activating GARDIEN mode');
+      case 'dev1': return t('Scène 4/8 — Portail Développeurs · Étape 1/4', 'Scene 4/8 — Developer Portal · Step 1/4');
+      case 'dev2': return t('Scène 5/8 — Portail Développeurs · Étape 2/4', 'Scene 5/8 — Developer Portal · Step 2/4');
+      case 'dev3': return t('Scène 6/8 — Portail Développeurs · Étape 3/4', 'Scene 6/8 — Developer Portal · Step 3/4');
+      case 'dev4': return t('Scène 7/8 — Portail Développeurs · Étape 4/4', 'Scene 7/8 — Developer Portal · Step 4/4');
+      case 'connexion': return t('Scène 8/8 — Connexion', 'Scene 8/8 — Login');
+      default: return t('Fin de la démo', 'Demo finished');
+    }
   };
 
   return (
@@ -114,7 +129,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
         <div>
           <span className="font-display font-extrabold text-white text-xs block">
-            {t('⚡ Démo automatique GHULABE', '⚡ GHULABE auto demo')}
+            {t('⚡ Démo GHULABE — mode présentation', '⚡ GHULABE demo — presentation mode')}
           </span>
           <span className="text-[#0066FF] font-mono text-[10px]">{phaseLabel()}</span>
         </div>
@@ -123,11 +138,26 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
         </button>
       </div>
 
-      <div className="py-2.5 shrink-0">{stepDots(6, phase)}</div>
+      {!isLast && (
+        <div className="px-4 pt-2 shrink-0">
+          <div className="flex items-center justify-between font-mono text-[10px] text-gray-400 mb-1">
+            <span>{formatTime(elapsedMs)}</span>
+            <span>{formatTime(phase.durationMs)}</span>
+          </div>
+          <div className="w-full h-1 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full bg-[#0066FF] transition-[width] duration-100 ease-linear"
+              style={{ width: `${Math.min(100, (elapsedMs / phase.durationMs) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="py-2.5 shrink-0">{stepDots()}</div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8">
 
-        {phase === 0 && (
+        {phase.id === 'scan' && (
           <div className="pt-3 space-y-4">
             <div className="text-center">
               <ShieldCheck className="w-9 h-9 text-[#0066FF] mx-auto mb-2" />
@@ -149,7 +179,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
                   {subStep >= 1 ? urlTyped || 'ebanking-pme-africa.sn' : (
                     <span className="text-gray-500">ex: monentreprise-dakar.com</span>
                   )}
-                  {phase === 0 && subStep === 0 && <span className="animate-pulse">|</span>}
+                  {subStep === 0 && <span className="animate-pulse">|</span>}
                 </div>
               </div>
 
@@ -175,57 +205,76 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
               </div>
             </div>
 
-            {subStep === 3 && (
+            {subStep >= 4 && (
               <div className="flex items-center justify-center gap-2 text-[#00FF88] text-xs font-mono animate-pulse">
                 <div className="w-3 h-3 border-2 border-[#00FF88] border-t-transparent rounded-full animate-spin" />
                 {t('Analyse en cours…', 'Scanning…')}
               </div>
             )}
+          </div>
+        )}
 
-            {subStep >= 4 && (
-              <div className="glass-card rounded-2xl border border-orange-400/40 p-4 space-y-2 animate-[fadeIn_0.4s_ease]">
-                <div className="flex items-center justify-between">
-                  <span className="font-display font-extrabold text-white text-xl">6,5<span className="text-xs text-gray-400">/10</span></span>
-                  <AlertOctagon className="w-5 h-5 text-orange-400" />
-                </div>
-                <p className="text-[11px] text-gray-400">{t('4 failles détectées — version gratuite', '4 issues found — free version')}</p>
-                <div className="text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-2">
-                  {t('🔒 Détail réservé au plan GARDIEN', '🔒 Details reserved for GARDIEN plan')}
-                </div>
+        {phase.id === 'resultat' && (
+          <div className="pt-3 space-y-4">
+            <div className="text-center">
+              <p className="text-white font-display font-extrabold text-base">
+                {t('Résultat du scan gratuit', 'Free scan result')}
+              </p>
+              <p className="text-gray-400 text-xs mt-1">ebanking-pme-africa.sn</p>
+            </div>
+            <div className="glass-card rounded-2xl border border-orange-400/40 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-display font-extrabold text-white text-2xl">6,5<span className="text-xs text-gray-400">/10</span></span>
+                <AlertOctagon className="w-6 h-6 text-orange-400" />
               </div>
+              <p className="text-[11px] text-gray-400">{t('4 failles détectées — version gratuite', '4 issues found — free version')}</p>
+            </div>
+            {subStep >= 1 && (
+              <div className="text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3 animate-[fadeIn_0.4s_ease]">
+                {t('🔒 Détail de chaque faille réservé au plan GARDIEN', '🔒 Details of each issue reserved for GARDIEN plan')}
+              </div>
+            )}
+            {subStep >= 2 && (
+              <p className="text-center text-[10px] text-gray-500 animate-[fadeIn_0.4s_ease]">
+                {t('Résultat envoyé par email et WhatsApp', 'Result sent by email and WhatsApp')}
+              </p>
             )}
           </div>
         )}
 
-        {phase === 1 && (
+        {phase.id === 'gardien' && (
           <div className="pt-3 space-y-4">
             <div className="text-center">
-              <span className="px-3 py-1 rounded-full bg-[#0066FF]/20 text-[#0066FF] font-mono text-[10px] font-bold uppercase">
-                🔒 {t('2FA obligatoire · AES-256', '2FA mandatory · AES-256')}
-              </span>
-              <p className="text-white font-display font-extrabold text-lg mt-2">
-                {t('Créer un compte PME', 'Create SME Account')}
+              <ShieldPlus className="w-9 h-9 text-[#00FF88] mx-auto mb-2" />
+              <p className="text-white font-display font-extrabold text-base">
+                {t('Passer au plan GARDIEN', 'Upgrade to GARDIEN')}
+              </p>
+              <p className="text-gray-400 text-xs mt-1">
+                {t('Surveillance automatique de vos domaines + détail complet des failles', 'Automatic domain monitoring + full issue details')}
               </p>
             </div>
 
-            <div className="glass-card rounded-2xl border border-[#0066FF]/40 p-4 space-y-3">
-              <Field icon={<User className="w-4 h-4 text-[#0066FF]" />} label={t('Nom ou Raison Sociale', 'Full Name / Company')} value={nameTyped} active={subStep === 0} />
-              {subStep >= 1 && <Field icon={<Smartphone className="w-4 h-4 text-[#0066FF]" />} label={t('Numéro WhatsApp', 'WhatsApp number')} value={waTyped} active={subStep === 1} />}
-              {subStep >= 2 && <Field icon={<Mail className="w-4 h-4 text-[#0066FF]" />} label="Email" value={emailTyped} active={subStep === 2} />}
-              {subStep >= 3 && <Field icon={<Lock className="w-4 h-4 text-[#0066FF]" />} label={t('Mot de passe', 'Password')} value={'•'.repeat(9)} active={false} />}
-            </div>
-
-            {subStep === 4 && (
-              <div className="glass-card rounded-2xl border border-[#00FF88]/40 p-4 flex items-center gap-3">
-                <CreditCard className="w-5 h-5 text-[#00FF88] animate-pulse" />
+            {subStep >= 1 && (
+              <div className="glass-card rounded-2xl border border-[#00FF88]/40 p-4 flex items-center gap-3 animate-[fadeIn_0.4s_ease]">
+                <CreditCard className="w-5 h-5 text-[#00FF88] shrink-0" />
                 <div>
                   <p className="text-white text-xs font-bold">{t('Paiement Mobile Money — 5000 FCFA', 'Mobile Money payment — 5000 FCFA')}</p>
-                  <p className="text-gray-400 text-[10px]">{t('Activation du plan GARDIEN…', 'Activating GARDIEN plan…')}</p>
+                  <p className="text-gray-400 text-[10px]">Airtel Money / Moov Money</p>
                 </div>
               </div>
             )}
 
-            {subStep >= 5 && (
+            {subStep >= 2 && (
+              <div className="space-y-1 animate-[fadeIn_0.4s_ease]">
+                <label className="font-mono text-gray-400 text-[10px]">{t('Numéro Mobile Money', 'Mobile Money number')}</label>
+                <div className="flex items-center gap-2 bg-[#0A0A0F] rounded-xl border border-[#0066FF]/50 px-3 py-2.5">
+                  <Smartphone className="w-4 h-4 text-[#0066FF]" />
+                  <span className="font-mono text-xs text-white">{gardienPhoneTyped}<span className="animate-pulse">|</span></span>
+                </div>
+              </div>
+            )}
+
+            {subStep >= 3 && (
               <div className="glass-card rounded-2xl border border-[#00FF88]/40 p-4 space-y-2 animate-[fadeIn_0.4s_ease]">
                 <div className="flex items-center gap-2 text-[#00FF88] font-bold text-xs">
                   <CheckCircle2 className="w-4 h-4" /> {t('GARDIEN activé — détail débloqué', 'GARDIEN activated — details unlocked')}
@@ -236,12 +285,15 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
                   <li>⚠ CSP absent</li>
                   <li>⚠ Fichier .env exposé — {t('critique', 'critical')}</li>
                 </ul>
+                <p className="text-[10px] text-gray-500 pt-1 border-t border-white/10">
+                  {t('3 domaines désormais suivis, scans automatiques réguliers.', '3 domains now monitored, regular automatic scans.')}
+                </p>
               </div>
             )}
           </div>
         )}
 
-        {phase === 2 && (
+        {phase.id === 'dev1' && (
           <StepShell title={t('Étape 1/4 — Formulaire d\'inscription candidat', 'Step 1/4 — Candidate registration form')} icon={<FileText className="w-4 h-4" />}>
             <Field icon={<User className="w-4 h-4 text-[#0066FF]" />} label={t('Nom complet (identique CNI)', 'Full name (matches ID)')} value={devNameTyped} active={subStep === 0} />
             {subStep >= 1 && <Field icon={<Mail className="w-4 h-4 text-[#0066FF]" />} label={t('Email professionnel', 'Professional email')} value={devEmailTyped} active={subStep === 1} />}
@@ -255,7 +307,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
           </StepShell>
         )}
 
-        {phase === 3 && (
+        {phase.id === 'dev2' && (
           <StepShell title={t('Étape 2/4 — Compétences & Portfolio', 'Step 2/4 — Skills & Portfolio')} icon={<ListChecks className="w-4 h-4" />}>
             <Field icon={<Globe className="w-4 h-4 text-[#0066FF]" />} label="Portfolio GitHub / LinkedIn" value={portfolioTyped} active={subStep === 0} />
             {subStep >= 1 && (
@@ -275,7 +327,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
           </StepShell>
         )}
 
-        {phase === 4 && (
+        {phase.id === 'dev3' && (
           <StepShell title={t('Étape 3/4 — Paiement & Vérification', 'Step 3/4 — Payment & Verification')} icon={<ShieldAlert className="w-4 h-4" />}>
             <div className="glass-card rounded-2xl border border-[#0066FF]/30 p-3 flex items-center gap-3">
               <CreditCard className="w-5 h-5 text-[#0066FF] shrink-0" />
@@ -287,7 +339,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
             {subStep >= 1 && (
               <div className="glass-card rounded-2xl border border-[#0066FF]/30 p-3 flex items-center gap-3 animate-[fadeIn_0.4s_ease]">
                 <FileText className="w-5 h-5 text-[#0066FF] shrink-0" />
-                <p className="text-white text-xs">{t('Pièce d\'identité téléversée', 'ID document uploaded')}</p>
+                <p className="text-white text-xs">{t('Pièce d\'identité téléversée (vraie caméra)', 'ID document uploaded (real camera)')}</p>
               </div>
             )}
             {subStep >= 2 && (
@@ -302,7 +354,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
           </StepShell>
         )}
 
-        {phase === 5 && (
+        {phase.id === 'dev4' && (
           <StepShell title={t('Étape 4/4 — Test de compétences', 'Step 4/4 — Skills test')} icon={<ListChecks className="w-4 h-4" />}>
             <div className="glass-card rounded-2xl border border-[#0066FF]/30 p-3 flex items-center gap-3">
               <Camera className="w-5 h-5 text-[#0066FF] shrink-0 animate-pulse" />
@@ -311,7 +363,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
             {subStep >= 1 && (
               <div className="glass-card rounded-2xl border border-[#00FF88]/40 p-3 animate-[fadeIn_0.4s_ease]">
                 <p className="text-white text-xs font-bold">{t('Score : 85%', 'Score: 85%')}</p>
-                <p className="text-gray-400 text-[10px]">{t('Test réussi — en revue par l\'équipe', 'Passed — under team review')}</p>
+                <p className="text-gray-400 text-[10px]">{t('Test réussi — validation finale manuelle par l\'équipe', 'Passed — final validation done manually by the team')}</p>
               </div>
             )}
             {subStep >= 2 && (
@@ -323,7 +375,27 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
           </StepShell>
         )}
 
-        {phase === 6 && (
+        {phase.id === 'connexion' && (
+          <div className="pt-3 space-y-4">
+            <div className="text-center">
+              <Lock className="w-9 h-9 text-[#0066FF] mx-auto mb-2" />
+              <p className="text-white font-display font-extrabold text-base">
+                {t('Connexion à votre compte', 'Log in to your account')}
+              </p>
+            </div>
+            <div className="glass-card rounded-2xl border border-[#0066FF]/40 p-4 space-y-3">
+              <Field icon={<Mail className="w-4 h-4 text-[#0066FF]" />} label="Email" value={loginEmailTyped} active={subStep === 0} />
+              {subStep >= 1 && <Field icon={<Lock className="w-4 h-4 text-[#0066FF]" />} label={t('Mot de passe', 'Password')} value={'•'.repeat(9)} active={false} />}
+            </div>
+            {subStep >= 2 && (
+              <div className="flex items-center justify-center gap-2 text-[#00FF88] text-xs font-mono animate-[fadeIn_0.4s_ease]">
+                <CheckCircle2 className="w-4 h-4" /> {t('Connexion réussie', 'Login successful')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {phase.id === 'fin' && (
           <div className="h-full flex flex-col items-center justify-center text-center gap-5 pt-10">
             <CheckCircle2 className="w-14 h-14 text-[#00FF88]" />
             <p className="text-white font-display font-bold text-base">{t('Démonstration terminée', 'Demo finished')}</p>
@@ -336,6 +408,34 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
           </div>
         )}
       </div>
+
+      {!isLast && (
+        <div className="flex items-center justify-center gap-3 px-4 py-3 border-t border-white/10 shrink-0">
+          <button
+            type="button"
+            onClick={() => goToPhase(phaseIndex - 1)}
+            disabled={phaseIndex === 0}
+            className="p-2.5 rounded-xl border border-white/15 text-gray-300 disabled:opacity-30"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaused(p => !p)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0066FF]/15 border border-[#0066FF] text-[#0066FF] font-bold text-xs"
+          >
+            {paused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+            {paused ? t('Reprendre', 'Resume') : t('Pause', 'Pause')}
+          </button>
+          <button
+            type="button"
+            onClick={() => goToPhase(phaseIndex + 1)}
+            className="p-2.5 rounded-xl border border-white/15 text-gray-300"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
