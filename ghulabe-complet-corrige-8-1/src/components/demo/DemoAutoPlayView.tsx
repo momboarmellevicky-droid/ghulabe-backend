@@ -125,7 +125,7 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0A0A0F] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[10000] bg-[#0A0A0F] flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
         <div>
           <span className="font-display font-extrabold text-white text-xs block">
