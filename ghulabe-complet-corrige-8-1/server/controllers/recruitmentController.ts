@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { initiateMobileMoneyPayment, checkPaymentStatus, MobileMoneyOperator } from '../services/paymentService';
+import { initiatePawaPayDeposit, checkPawaPayStatus } from '../services/pawapayService';
 import { generateAuditLog } from '../utils/crypto';
 import { isValidEmail, isValidPhoneNumber } from '../utils/validators';
 
@@ -200,4 +201,51 @@ export async function getVerificationPhotos(req: Request, res: Response): Promis
   );
 
   res.status(200).json({ success: true, photos: withUrls });
+}
+
+// ============================================================
+// PAIEMENT ZONE CFA ÉLARGIE (hors Gabon) POUR LE RECRUTEMENT —
+// complément public à startRecruitmentPayment (SingPay), pour les candidats
+// hors Gabon qui n'ont ni Airtel Money ni Moov Money Gabon. Pas d'auth requise :
+// le candidat n'a pas encore de compte à ce stade du parcours (même logique
+// que startRecruitmentPayment).
+// ============================================================
+
+export async function startRecruitmentPawaPayPayment(req: Request, res: Response): Promise<void> {
+  const { email, amount, currency, phoneNumber, country, correspondent } = req.body as {
+    email: string; amount: number; currency: string; phoneNumber: string; country: string; correspondent: string;
+  };
+  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+  if (!email || !amount || !currency || !phoneNumber || !country || !correspondent) {
+    res.status(400).json({ error_fr: "Paramètres de paiement incomplets." });
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error_fr: "Adresse email invalide.", error_en: "Invalid email address." });
+    return;
+  }
+
+  const result = await initiatePawaPayDeposit({
+    amount,
+    currency,
+    phoneNumber,
+    country,
+    correspondent,
+    reference: `recrutement-dev-${Date.now()}`,
+    description: `Frais de recrutement développeur GHULABE (${email})`,
+    userId: email,
+    ip,
+  });
+
+  res.status(result.success ? 200 : 400).json(result);
+}
+
+export async function getRecruitmentPawaPayStatus(req: Request, res: Response): Promise<void> {
+  const { depositId } = req.params;
+  const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
+
+  const result = await checkPawaPayStatus(depositId, 'recruitment-candidate', ip);
+  res.status(result.success ? 200 : 400).json(result);
 }

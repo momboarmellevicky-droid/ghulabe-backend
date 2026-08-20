@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../../types';
 import { GhulabeBackend } from '../../services/apiClient';
+import { PAWAPAY_CFA_COUNTRIES } from '../../data/pawapayCountries';
 import { X, Smartphone, Loader2, CheckCircle2, AlertOctagon } from 'lucide-react';
 
 interface PaymentModalProps {
@@ -17,9 +18,13 @@ const PLAN_INFO: Record<'gardien' | 'pentest_premium', { amount: number; label_f
 };
 
 type Phase = 'form' | 'pending' | 'success' | 'failed';
+type Channel = 'gabon' | 'cfa_elargie';
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, accessToken, onClose, onSuccess }) => {
+  const [channel, setChannel] = useState<Channel>('gabon');
   const [operator, setOperator] = useState<'airtel' | 'moov'>('airtel');
+  const [selectedCountryCode, setSelectedCountryCode] = useState(PAWAPAY_CFA_COUNTRIES[0].isoCode);
+  const [selectedCorrespondent, setSelectedCorrespondent] = useState(PAWAPAY_CFA_COUNTRIES[0].operators[0].code);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phase, setPhase] = useState<Phase>('form');
   const [errorMsg, setErrorMsg] = useState('');
@@ -28,6 +33,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
   const attemptsRef = useRef(0);
 
   const plan = PLAN_INFO[targetPlan];
+  const selectedCountry = PAWAPAY_CFA_COUNTRIES.find(c => c.isoCode === selectedCountryCode) || PAWAPAY_CFA_COUNTRIES[0];
 
   useEffect(() => {
     return () => {
@@ -35,14 +41,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
     };
   }, []);
 
-  const pollStatus = (txId: string) => {
+  const pollStatus = (txId: string, viaPawaPay: boolean) => {
     attemptsRef.current += 1;
-    GhulabeBackend.checkPaymentStatus(txId, accessToken)
+    const checker = viaPawaPay
+      ? GhulabeBackend.checkPawaPayStatus(txId, accessToken)
+      : GhulabeBackend.checkPaymentStatus(txId, accessToken);
+    checker
       .then((result) => {
-        if (result.status === 'success') {
+        if (result.status === 'success' || result.status === 'COMPLETED') {
           setPhase('success');
           setTimeout(() => onSuccess(targetPlan), 1200);
-        } else if (result.status === 'failed') {
+        } else if (result.status === 'failed' || result.status === 'FAILED') {
           setPhase('failed');
           setErrorMsg(lang === 'fr' ? result.message_fr : result.message_en);
         } else if (attemptsRef.current >= 15) {
@@ -51,7 +60,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
             ? "Délai dépassé. Vérifiez si le prélèvement a eu lieu avant de réessayer."
             : "Timed out. Check whether the deduction happened before retrying.");
         } else {
-          pollRef.current = window.setTimeout(() => pollStatus(txId), 4000);
+          pollRef.current = window.setTimeout(() => pollStatus(txId, viaPawaPay), 4000);
         }
       })
       .catch((err: any) => {
@@ -59,7 +68,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
           setPhase('failed');
           setErrorMsg(err.message || (lang === 'fr' ? 'Erreur de vérification du paiement.' : 'Payment verification error.'));
         } else {
-          pollRef.current = window.setTimeout(() => pollStatus(txId), 4000);
+          pollRef.current = window.setTimeout(() => pollStatus(txId, viaPawaPay), 4000);
         }
       });
   };
@@ -71,30 +80,60 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
     attemptsRef.current = 0;
 
     try {
-      const result = await GhulabeBackend.initiatePayment(
-        {
-          amount: plan.amount,
-          phoneNumber,
-          operator,
-          reference: `plan-${targetPlan}-${Date.now()}`,
-          description: `Souscription ${plan.label_fr}`,
-        },
-        accessToken
-      );
+      if (channel === 'gabon') {
+        const result = await GhulabeBackend.initiatePayment(
+          {
+            amount: plan.amount,
+            phoneNumber,
+            operator,
+            reference: `plan-${targetPlan}-${Date.now()}`,
+            description: `Souscription ${plan.label_fr}`,
+          },
+          accessToken
+        );
 
-      if (!result.success || !result.transactionId) {
-        setPhase('failed');
-        setErrorMsg(lang === 'fr' ? result.message_fr : result.message_en);
-        return;
-      }
+        if (!result.success || !result.transactionId) {
+          setPhase('failed');
+          setErrorMsg(lang === 'fr' ? result.message_fr : result.message_en);
+          return;
+        }
 
-      setTransactionId(result.transactionId);
+        setTransactionId(result.transactionId);
 
-      if (result.status === 'success') {
-        setPhase('success');
-        setTimeout(() => onSuccess(targetPlan), 1200);
+        if (result.status === 'success') {
+          setPhase('success');
+          setTimeout(() => onSuccess(targetPlan), 1200);
+        } else {
+          pollStatus(result.transactionId, false);
+        }
       } else {
-        pollStatus(result.transactionId);
+        const result = await GhulabeBackend.initiatePawaPayPayment(
+          {
+            amount: plan.amount,
+            currency: selectedCountry.currency,
+            phoneNumber,
+            country: selectedCountry.isoCode,
+            correspondent: selectedCorrespondent,
+            reference: `plan-${targetPlan}-${Date.now()}`,
+            description: `Souscription ${plan.label_fr}`,
+          },
+          accessToken
+        );
+
+        if (!result.success || !result.depositId) {
+          setPhase('failed');
+          setErrorMsg(lang === 'fr' ? result.message_fr : result.message_en);
+          return;
+        }
+
+        setTransactionId(result.depositId);
+
+        if (result.status === 'success' || result.status === 'COMPLETED') {
+          setPhase('success');
+          setTimeout(() => onSuccess(targetPlan), 1200);
+        } else {
+          pollStatus(result.depositId, true);
+        }
       }
     } catch (err: any) {
       setPhase('failed');
@@ -125,19 +164,73 @@ return (
             <div className="flex bg-[#0D1B2A] p-1 rounded-xl border border-white/10 font-display font-bold text-xs">
               <button
                 type="button"
-                onClick={() => setOperator('airtel')}
-                className={`flex-1 py-2.5 rounded-lg transition-all ${operator === 'airtel' ? 'bg-[#FF2D2D] text-white' : 'text-gray-400'}`}
+                onClick={() => setChannel('gabon')}
+                className={`flex-1 py-2.5 rounded-lg transition-all ${channel === 'gabon' ? 'bg-[#0066FF] text-white' : 'text-gray-400'}`}
               >
-                Airtel Money
+                {lang === 'fr' ? 'Gabon' : 'Gabon'}
               </button>
               <button
                 type="button"
-                onClick={() => setOperator('moov')}
-                className={`flex-1 py-2.5 rounded-lg transition-all ${operator === 'moov' ? 'bg-[#0066FF] text-white' : 'text-gray-400'}`}
+                onClick={() => setChannel('cfa_elargie')}
+                className={`flex-1 py-2.5 rounded-lg transition-all ${channel === 'cfa_elargie' ? 'bg-[#00FF88] text-[#0A0A0F]' : 'text-gray-400'}`}
               >
-                Moov Money
+                {lang === 'fr' ? 'Autre pays (zone CFA)' : 'Other country (CFA zone)'}
               </button>
             </div>
+
+            {channel === 'gabon' ? (
+              <div className="flex bg-[#0D1B2A] p-1 rounded-xl border border-white/10 font-display font-bold text-xs">
+                <button
+                  type="button"
+                  onClick={() => setOperator('airtel')}
+                  className={`flex-1 py-2.5 rounded-lg transition-all ${operator === 'airtel' ? 'bg-[#FF2D2D] text-white' : 'text-gray-400'}`}
+                >
+                  Airtel Money
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOperator('moov')}
+                  className={`flex-1 py-2.5 rounded-lg transition-all ${operator === 'moov' ? 'bg-[#0066FF] text-white' : 'text-gray-400'}`}
+                >
+                  Moov Money
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="font-mono text-gray-300 text-xs">
+                    {lang === 'fr' ? 'Pays' : 'Country'} *
+                  </label>
+                  <select
+                    value={selectedCountryCode}
+                    onChange={(e) => {
+                      const country = PAWAPAY_CFA_COUNTRIES.find(c => c.isoCode === e.target.value) || PAWAPAY_CFA_COUNTRIES[0];
+                      setSelectedCountryCode(country.isoCode);
+                      setSelectedCorrespondent(country.operators[0].code);
+                    }}
+                    className="w-full px-3 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                  >
+                    {PAWAPAY_CFA_COUNTRIES.map(c => (
+                      <option key={c.isoCode} value={c.isoCode}>{c.labelFr}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="font-mono text-gray-300 text-xs">
+                    {lang === 'fr' ? 'Opérateur Mobile Money' : 'Mobile Money operator'} *
+                  </label>
+                  <select
+                    value={selectedCorrespondent}
+                    onChange={(e) => setSelectedCorrespondent(e.target.value)}
+                    className="w-full px-3 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                  >
+                    {selectedCountry.operators.map(op => (
+                      <option key={op.code} value={op.code}>{op.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="font-mono text-gray-300 text-xs">

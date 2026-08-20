@@ -2,6 +2,8 @@ import { Router } from 'express';
 import {
   startRecruitmentPayment,
   getRecruitmentPaymentStatus,
+  startRecruitmentPawaPayPayment,
+  getRecruitmentPawaPayStatus,
   uploadVerificationPhoto,
   getVerificationPhotos,
   notifyTestCompleted,
@@ -15,6 +17,11 @@ const router = Router();
 // le candidat n'a pas encore de compte à ce stade du parcours.
 router.post('/start', apiRateLimiter, startRecruitmentPayment);
 router.get('/status/:transactionId', apiRateLimiter, getRecruitmentPaymentStatus);
+
+// Paiement zone CFA élargie (hors Gabon) — complément à /start (SingPay) pour
+// les candidats sans Airtel Money / Moov Money Gabon. Pas d'auth non plus.
+router.post('/pawapay-start', apiRateLimiter, startRecruitmentPawaPayPayment);
+router.get('/pawapay-status/:depositId', apiRateLimiter, getRecruitmentPawaPayStatus);
 
 // Vérification anti-triche RÉELLE (document d'identité + preuve de vie + captures QCM) —
 // pas d'auth requise non plus : le candidat n'a pas encore de compte à ce stade.

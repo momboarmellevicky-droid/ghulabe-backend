@@ -6,6 +6,7 @@ import { AfricaMap } from './AfricaMap';
 import { QCMTestView } from './QCMTestView';
 import { MissionRequestModal } from './MissionRequestModal';
 import { MissionChatModal } from './MissionChatModal';
+import { PAWAPAY_CFA_COUNTRIES } from '../../data/pawapayCountries';
 import { 
   UserCheck, Search, MapPin, Award, ExternalLink, 
   ArrowRight, CheckCircle2, Eye, 
@@ -60,6 +61,11 @@ export const DevsPortalView: React.FC<DevsPortalViewProps> = ({
   });
   const [paymentMethod, setPaymentMethod] = useState<'airtel' | 'moov' | 'card'>('airtel');
 const [recruitPhone, setRecruitPhone] = useState('');
+  // Zone CFA élargie (hors Gabon) via PawaPay — complément à Airtel/Moov Gabon
+  // pour les candidats qui n'ont ni l'un ni l'autre.
+  const [paymentChannel, setPaymentChannel] = useState<'gabon' | 'cfa_elargie'>('gabon');
+  const [recruitCountryCode, setRecruitCountryCode] = useState(PAWAPAY_CFA_COUNTRIES[0].isoCode);
+  const [recruitCorrespondent, setRecruitCorrespondent] = useState(PAWAPAY_CFA_COUNTRIES[0].operators[0].code);
   const [isVerifyingSmileId, setIsVerifyingSmileId] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -153,7 +159,7 @@ const handleStep2Pay = async () => {
       : "Please enter your Mobile Money number.");
     return;
   }
-  if (paymentMethod !== 'airtel' && paymentMethod !== 'moov') {
+  if (paymentChannel === 'gabon' && paymentMethod !== 'airtel' && paymentMethod !== 'moov') {
     alert(lang === 'fr'
       ? "Ce mode de paiement n'est pas encore disponible. Choisissez Airtel Money ou Moov Money."
       : "This payment method is not yet available. Choose Airtel Money or Moov Money.");
@@ -161,15 +167,28 @@ const handleStep2Pay = async () => {
   }
 
   setIsProcessingPayment(true);
+
+  const recruitCountry = PAWAPAY_CFA_COUNTRIES.find(c => c.isoCode === recruitCountryCode) || PAWAPAY_CFA_COUNTRIES[0];
+
   try {
-    const res = await fetch(`${API_BASE_URL}/recruitment/start`, {
+    const startUrl = paymentChannel === 'gabon'
+      ? `${API_BASE_URL}/recruitment/start`
+      : `${API_BASE_URL}/recruitment/pawapay-start`;
+    const startBody = paymentChannel === 'gabon'
+      ? { email: formData.email, phoneNumber: recruitPhone, operator: paymentMethod }
+      : {
+          email: formData.email,
+          amount: 5000,
+          currency: recruitCountry.currency,
+          phoneNumber: recruitPhone,
+          country: recruitCountry.isoCode,
+          correspondent: recruitCorrespondent,
+        };
+
+    const res = await fetch(startUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: formData.email,
-        phoneNumber: recruitPhone,
-        operator: paymentMethod,
-      }),
+      body: JSON.stringify(startBody),
     });
     const data = await res.json();
 
@@ -181,14 +200,15 @@ const handleStep2Pay = async () => {
       return;
     }
 
-    if (data.status === 'success') {
+    if (data.status === 'success' || data.status === 'COMPLETED') {
       alert(lang === 'fr' ? data.message_fr : data.message_en);
       setIsProcessingPayment(false);
       setRecruitStep(3);
       return;
     }
 
-    if (!data.transactionId) {
+    const trackingId = paymentChannel === 'gabon' ? data.transactionId : data.depositId;
+    if (!trackingId) {
       alert(lang === 'fr'
         ? "Paiement initié mais impossible de suivre son statut. Contactez le support."
         : "Payment initiated but status cannot be tracked. Contact support.");
@@ -198,18 +218,21 @@ const handleStep2Pay = async () => {
 
     let attempts = 0;
     const maxAttempts = 40;
+    const statusUrl = paymentChannel === 'gabon'
+      ? `${API_BASE_URL}/recruitment/status/${trackingId}`
+      : `${API_BASE_URL}/recruitment/pawapay-status/${trackingId}`;
     const poll = setInterval(async () => {
       attempts++;
       try {
-      const statusRes = await fetch(`${API_BASE_URL}/recruitment/status/${data.transactionId}`);
+      const statusRes = await fetch(statusUrl);
         const statusData = await statusRes.json();
 
-        if (statusData.status === 'success') {
+        if (statusData.status === 'success' || statusData.status === 'COMPLETED') {
           clearInterval(poll);
           alert(lang === 'fr' ? statusData.message_fr : statusData.message_en);
           setIsProcessingPayment(false);
           setRecruitStep(3);
-        } else if (statusData.status === 'failed' || attempts >= maxAttempts) {
+        } else if (statusData.status === 'failed' || statusData.status === 'FAILED' || attempts >= maxAttempts) {
           clearInterval(poll);
           setIsProcessingPayment(false);
           alert(lang === 'fr'
@@ -855,8 +878,26 @@ const handleStep2Pay = async () => {
                 </div>
               </div>
               <div className="space-y-4 text-left">
+                {/* Sélecteur de canal — Gabon (SingPay) ou Autre pays zone CFA (PawaPay) */}
+                <div className="flex bg-[#0D1B2A] p-1 rounded-xl border border-white/10 font-mono text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentChannel('gabon')}
+                    className={`flex-1 py-2.5 rounded-lg transition-all ${paymentChannel === 'gabon' ? 'bg-[#0066FF] text-white' : 'text-gray-400'}`}
+                  >
+                    Gabon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentChannel('cfa_elargie')}
+                    className={`flex-1 py-2.5 rounded-lg transition-all ${paymentChannel === 'cfa_elargie' ? 'bg-[#00FF88] text-[#0A0A0F]' : 'text-gray-400'}`}
+                  >
+                    Autre pays (zone CFA)
+                  </button>
+                </div>
+
                 <div className="space-y-1.5">
-  <label className="font-mono text-gray-300 text-xs">Numéro Mobile Money (Airtel/Moov) *</label>
+  <label className="font-mono text-gray-300 text-xs">Numéro Mobile Money {paymentChannel === 'gabon' ? '(Airtel/Moov)' : ''} *</label>
   <input
     type="tel"
     value={recruitPhone}
@@ -866,6 +907,8 @@ const handleStep2Pay = async () => {
     required
   />
 </div>
+                {paymentChannel === 'gabon' ? (
+                  <>
                 <p className="text-xs font-mono text-gray-300 font-bold">Choisissez votre méthode de paiement mobile money ou carte :</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
                   <button
@@ -899,6 +942,39 @@ const handleStep2Pay = async () => {
                 <span className="text-[10px] font-mono uppercase">Bientôt disponible</span>
               </button>
                 </div>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="font-mono text-gray-300 text-xs">Pays *</label>
+                      <select
+                        value={recruitCountryCode}
+                        onChange={(e) => {
+                          const country = PAWAPAY_CFA_COUNTRIES.find(c => c.isoCode === e.target.value) || PAWAPAY_CFA_COUNTRIES[0];
+                          setRecruitCountryCode(country.isoCode);
+                          setRecruitCorrespondent(country.operators[0].code);
+                        }}
+                        className="w-full p-3.5 rounded-xl bg-[#0A0A0F] border border-[#FFB800]/50 text-white font-mono text-sm focus:outline-none focus:border-[#FFB800]"
+                      >
+                        {PAWAPAY_CFA_COUNTRIES.map(c => (
+                          <option key={c.isoCode} value={c.isoCode}>{c.labelFr}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="font-mono text-gray-300 text-xs">Opérateur Mobile Money *</label>
+                      <select
+                        value={recruitCorrespondent}
+                        onChange={(e) => setRecruitCorrespondent(e.target.value)}
+                        className="w-full p-3.5 rounded-xl bg-[#0A0A0F] border border-[#FFB800]/50 text-white font-mono text-sm focus:outline-none focus:border-[#FFB800]"
+                      >
+                        {(PAWAPAY_CFA_COUNTRIES.find(c => c.isoCode === recruitCountryCode) || PAWAPAY_CFA_COUNTRIES[0]).operators.map(op => (
+                          <option key={op.code} value={op.code}>{op.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between items-center pt-6 border-t border-white/10">

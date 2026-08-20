@@ -182,6 +182,73 @@ export const GhulabeBackend = {
     return data;
   },
 
+  // Paiement zone CFA élargie (hors Gabon) via PawaPay — complément à SingPay,
+  // pour les pays où les clients n'ont ni Airtel Money ni Moov Money Gabon
+  // (Cameroun, Côte d'Ivoire, Sénégal, Congo-Brazzaville, Bénin, Burkina Faso).
+  async initiatePawaPayPayment(
+    params: { amount: number; currency: string; phoneNumber: string; country: string; correspondent: string; reference: string; description?: string },
+    token: string
+  ): Promise<{ success: boolean; depositId?: string; status: string; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/pawapay/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors du paiement.');
+    }
+    return data;
+  },
+
+  async checkPawaPayStatus(
+    depositId: string,
+    token: string
+  ): Promise<{ success: boolean; depositId?: string; status: string; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/pawapay/status/${depositId}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors de la vérification du statut.');
+    }
+    return data;
+  },
+
+  // Variante SANS authentification, pour le paiement de candidature développeur
+  // (le candidat n'a pas encore de compte à ce stade du parcours).
+  async initiateRecruitmentPawaPayPayment(
+    params: { email: string; amount: number; currency: string; phoneNumber: string; country: string; correspondent: string }
+  ): Promise<{ success: boolean; depositId?: string; status: string; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/recruitment/pawapay-start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors du paiement.');
+    }
+    return data;
+  },
+
+  async checkRecruitmentPawaPayStatus(
+    depositId: string
+  ): Promise<{ success: boolean; depositId?: string; status: string; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/recruitment/pawapay-status/${depositId}`, {
+      method: 'GET',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors de la vérification du statut.');
+    }
+    return data;
+  },
+
   async getPendingApps(token?: string): Promise<any[]> {
     if (!token) {
       console.warn('[GHULABE Backend Wrapper] getPendingApps: aucun token de session disponible.');
