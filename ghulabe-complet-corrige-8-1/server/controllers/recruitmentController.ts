@@ -160,6 +160,15 @@ export async function notifyTestCompleted(req: Request, res: Response): Promise<
 
   res.status(200).json({ success: true });
 
+  // Le score n'était auparavant jamais sauvegardé nulle part : il partait uniquement
+  // dans l'alerte admin puis disparaissait. Il est maintenant persisté sur le compte
+  // du candidat pour que le panneau d'approbation admin puisse l'afficher.
+  await supabaseAdmin
+    .from('users')
+    .update({ qcm_score_percentage: scorePercentage, qcm_passed: passed })
+    .eq('email', email)
+    .eq('role', 'dev');
+
   const suspicious = scorePercentage === 100;
   const label = passed ? '✅ Test QCM terminé — RÉUSSI' : '❌ Test QCM terminé — ÉCHOUÉ';
   const details = `Score : ${scorePercentage}%.` + (suspicious ? ' ⚠️ Score parfait — à vérifier manuellement.' : '');

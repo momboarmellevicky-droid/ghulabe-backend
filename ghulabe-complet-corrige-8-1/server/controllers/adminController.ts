@@ -1,11 +1,17 @@
 import { Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
+import { sendDevDecisionEmail } from '../services/emailService';
 
+// Corrige un bug racine : cette fonction interrogeait auparavant une table
+// `dev_applications` jamais alimentée nulle part dans le code (les inscriptions
+// candidat vont réellement dans `users`, role='dev' — voir authController.register).
+// C'est pour cette raison qu'aucune candidature n'apparaissait jamais côté admin.
 export async function getPendingApps(req: Request, res: Response): Promise<void> {
   const { data, error } = await supabaseAdmin
-    .from('dev_applications')
-    .select('id, name, email, country, city, speciality, languages, rate_fcfa, experience, portfolio, bio, smile_identity_status, created_at')
-    .eq('smile_identity_status', 'pending')
+    .from('users')
+    .select('id, name, email, phone, country, city, specialites, rate_fcfa, portfolio_url, bio, qcm_score_percentage, qcm_passed, verification_status, created_at')
+    .eq('role', 'dev')
+    .eq('verification_status', 'pending')
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -13,22 +19,37 @@ export async function getPendingApps(req: Request, res: Response): Promise<void>
     return;
   }
 
-  res.status(200).json({ applications: data });
+  const applications = (data || []).map((row: any) => ({
+    ...row,
+    speciality: (row.specialites && row.specialites[0]) || '',
+    test_score: row.qcm_score_percentage ?? null,
+  }));
+
+  res.status(200).json({ applications });
 }
 export async function updateAppStatus(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, reason } = req.body as { status: string; reason?: string };
 
   if (!['approved', 'rejected'].includes(status)) {
     res.status(400).json({ error_fr: "Statut invalide. Utilisez 'approved' ou 'rejected'." });
     return;
   }
 
+  const updatePayload: Record<string, any> = {
+    verification_status: status,
+    verification_rejection_reason: status === 'rejected' ? (reason || null) : null,
+  };
+  if (status === 'approved') {
+    updatePayload.badge_level = 'GHULABE CERTIFIED';
+  }
+
   const { data, error } = await supabaseAdmin
-    .from('dev_applications')
-    .update({ smile_identity_status: status })
+    .from('users')
+    .update(updatePayload)
     .eq('id', id)
-    .select()
+    .eq('role', 'dev')
+    .select('id, name, email')
     .single();
 
   if (error) {
@@ -37,6 +58,19 @@ export async function updateAppStatus(req: Request, res: Response): Promise<void
   }
 
   res.status(200).json({ application: data });
+
+  // Le candidat n'était auparavant jamais informé de la décision — il restait bloqué
+  // sans savoir s'il était accepté. On l'informe désormais systématiquement par email.
+  if (data?.email) {
+    await sendDevDecisionEmail(
+      data.email,
+      data.name || '',
+      status === 'approved',
+      reason,
+      'admin-decision',
+      req.ip || 'unknown-ip'
+    );
+  }
 }
 import { sendOtpEmail } from '../services/emailService';
 

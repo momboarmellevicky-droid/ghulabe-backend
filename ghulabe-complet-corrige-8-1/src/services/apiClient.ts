@@ -203,14 +203,14 @@ export const GhulabeBackend = {
       return [];
     }
   },
-  async updateAppStatus(id: string, status: 'approved' | 'rejected', token: string): Promise<any> {
+  async updateAppStatus(id: string, status: 'approved' | 'rejected', token: string, reason?: string): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/admin/pending-apps/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, reason }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

@@ -343,6 +343,100 @@ export async function sendAdminRecruitmentAlertEmail(
   }
 }
 
+/**
+ * Notification au candidat développeur suite à la décision de l'admin
+ * (approbation ou refus de sa candidature après le parcours de vérification).
+ */
+export async function sendDevDecisionEmail(
+  toEmail: string,
+  candidateName: string,
+  approved: boolean,
+  reasonText: string | undefined,
+  userId: string,
+  ip: string
+): Promise<boolean> {
+  if (!RESEND_API_KEY) {
+    generateAuditLog({
+      action: 'EMAIL_DEV_DECISION_SKIPPED',
+      userId,
+      ipAddress: ip,
+      status: 'BLOCKED',
+      details: `Décision candidature ignorée (RESEND_API_KEY non configurée) pour ${toEmail}.`,
+    });
+    return false;
+  }
+
+  const subject = approved
+    ? '✅ Votre candidature GHULABE a été approuvée !'
+    : 'Résultat de votre candidature GHULABE';
+
+  const text = approved
+    ? `Bonjour ${candidateName},\n\nBonne nouvelle : votre candidature au portail développeurs GHULABE a été approuvée. Votre compte est désormais certifié GHULABE CERTIFIED et visible par les entreprises à la recherche d'experts en sécurité.\n\nL'équipe GHULABE`
+    : `Bonjour ${candidateName},\n\nAprès examen de votre candidature au portail développeurs GHULABE, nous ne sommes pas en mesure de la valider pour le moment.${reasonText ? `\n\nMotif : ${reasonText}` : ''}\n\nVous pouvez soumettre une nouvelle candidature ultérieurement.\n\nL'équipe GHULABE`;
+
+  const html = approved
+    ? `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;">
+        <h2 style="color:#00FF88;">✅ Candidature approuvée</h2>
+        <p>Bonjour <strong>${candidateName}</strong>,</p>
+        <p>Votre candidature au portail développeurs GHULABE a été approuvée. Votre compte est désormais certifié <strong style="color:#00FF88;">GHULABE CERTIFIED</strong> et visible par les entreprises à la recherche d'experts en sécurité.</p>
+        <p style="color:#9CA3AF;font-size:13px;">L'équipe GHULABE</p>
+      </div>`
+    : `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;">
+        <h2 style="color:#FF6B2D;">Résultat de votre candidature</h2>
+        <p>Bonjour <strong>${candidateName}</strong>,</p>
+        <p>Après examen de votre candidature au portail développeurs GHULABE, nous ne sommes pas en mesure de la valider pour le moment.</p>
+        ${reasonText ? `<p style="color:#F3F4F6;background:#0D1B2A;padding:12px;border-radius:6px;border-left:3px solid #FF6B2D;">Motif : ${reasonText}</p>` : ''}
+        <p style="color:#9CA3AF;font-size:13px;">Vous pouvez soumettre une nouvelle candidature ultérieurement.<br/>L'équipe GHULABE</p>
+      </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+        to: [toEmail],
+        subject,
+        html,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      generateAuditLog({
+        action: 'EMAIL_DEV_DECISION_FAILED',
+        userId,
+        ipAddress: ip,
+        status: 'FAILED',
+        details: `Échec envoi décision candidature à ${toEmail} : ${res.status} ${errorBody}`,
+      });
+      return false;
+    }
+
+    generateAuditLog({
+      action: 'EMAIL_DEV_DECISION_SENT',
+      userId,
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: `Décision candidature (${approved ? 'approuvée' : 'refusée'}) envoyée à ${toEmail}.`,
+    });
+    return true;
+  } catch (err: any) {
+    generateAuditLog({
+      action: 'EMAIL_DEV_DECISION_FAILED',
+      userId,
+      ipAddress: ip,
+      status: 'FAILED',
+      details: `Erreur critique décision candidature à ${toEmail} : ${err.message}`,
+    });
+    return false;
+  }
+}
+
 export async function sendPasswordResetEmail(
   toEmail: string,
   otp: string,

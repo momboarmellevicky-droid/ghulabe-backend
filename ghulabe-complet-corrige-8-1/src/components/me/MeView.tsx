@@ -4,7 +4,7 @@ import { getT } from '../../data/i18n';
 import { MOCK_DEVELOPERS, MOCK_MISSIONS, MOCK_MESSAGES } from '../../data/mockData';
 import { GhulabeBackend } from '../../services/apiClient';
 import {
-  FileText, DollarSign, Key, UserX, UserCheck, Eye
+  FileText, DollarSign, Key, UserX, UserCheck, Eye, MessageCircle
 } from 'lucide-react';
 
 interface MeViewProps {
@@ -127,11 +127,12 @@ export const MeView: React.FC<MeViewProps> = ({
 
     
 
-    const handleRejectApp = async (id: string) => {
-  
+    const handleRejectApp = async (id: string, name: string) => {
     if (!accessToken) return;
+    const reason = window.prompt(`Motif du refus pour "${name}" (transmis au candidat par email) :`);
+    if (reason === null) return; // annulé
     try {
-      await GhulabeBackend.updateAppStatus(id, 'rejected', accessToken);
+      await GhulabeBackend.updateAppStatus(id, 'rejected', accessToken, reason || undefined);
       setPendingApps(pendingApps.filter(a => a.id !== id));
       alert("❌ Candidature refusée. Email de notification transmis.");
     } catch (err: any) {
@@ -314,12 +315,29 @@ export const MeView: React.FC<MeViewProps> = ({
                         </span>
                       </div>
                       <p className="text-xs font-mono text-gray-400">{app.email} • {app.city}, {app.country}</p>
-                      <div className="p-2 rounded bg-[#0D1B2A] border border-[#00FF88]/30 font-mono text-[11px] text-[#00FF88]">
-                        🛡️ Biométrie Smile ID : {app.smile_identity_status}
-                      </div>
+                      {app.phone && (
+                        <a
+                          href={`https://wa.me/${app.phone.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 p-2 rounded bg-[#00FF88]/10 border border-[#00FF88]/30 font-mono text-[11px] text-[#00FF88] hover:bg-[#00FF88]/20 transition-colors w-fit"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          Discuter sur WhatsApp — {app.phone}
+                        </a>
+                      )}
                       <div className="flex items-center justify-between font-mono text-xs">
-                        <span className="text-gray-400">Score QCM : <strong className="text-[#00FF88]">{app.test_score}%</strong> (Seuil ≥ 70% OK)</span>
-                        <span className="text-white font-bold">{app.rate_fcfa.toLocaleString()} FCFA/h</span>
+                        <span className="text-gray-400">
+                          Score QCM :{' '}
+                          {app.test_score !== null ? (
+                            <strong className={app.test_score >= 70 ? 'text-[#00FF88]' : 'text-[#FF6B2D]'}>
+                              {app.test_score}% {app.test_score >= 70 ? '(Seuil ≥ 70% OK)' : '(sous le seuil)'}
+                            </strong>
+                          ) : (
+                            <strong className="text-gray-500">test non terminé</strong>
+                          )}
+                        </span>
+                        <span className="text-white font-bold">{(app.rate_fcfa || 0).toLocaleString()} FCFA/h</span>
                       </div>
                     </div>
 
@@ -331,7 +349,7 @@ export const MeView: React.FC<MeViewProps> = ({
                         ✓ Approuver
                       </button>
                       <button
-                        onClick={() => handleRejectApp(app.id)}
+                        onClick={() => handleRejectApp(app.id, app.name)}
                         className="flex-1 py-2.5 rounded-xl bg-[#FF2D2D]/20 hover:bg-[#FF2D2D] text-[#FF2D2D] hover:text-white font-display font-bold text-xs uppercase cursor-pointer border border-[#FF2D2D]/40"
                       >
                         ✕ Refuser
