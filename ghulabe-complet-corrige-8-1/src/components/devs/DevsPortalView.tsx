@@ -625,7 +625,7 @@ const handleStep2Pay = async () => {
                 { s: 1, title: "Formulaire", sub: "ghulabe.com/dev/apply" },
                 { s: 2, title: "Paiement", sub: "5 000 FCFA non remboursable" },
                 { s: 3, title: "Smile Identity", sub: "CNI + Liveness check 30s" },
-                { s: 4, title: "Test QCM", sub: "30 questions / 45s / Webcam" }
+                { s: 4, title: "Test QCM", sub: "20 questions / 45s / Webcam" }
               ].map((item) => {
                 const isCurrent = recruitStep === item.s;
                 const isDone = typeof recruitStep === 'number' ? recruitStep > item.s : true;

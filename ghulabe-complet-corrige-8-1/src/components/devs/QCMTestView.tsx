@@ -390,7 +390,7 @@ export const QCMTestView: React.FC<QCMTestViewProps> = ({
             disabled={selectedAnswers[currentQ.id] === undefined}
             className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00CC6A] hover:from-[#00CC6A] hover:to-[#00994D] text-[#0A0A0F] font-display font-extrabold text-sm uppercase transition-all shadow-[0_0_20px_rgba(0,255,136,0.4)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {currentQIndex === QCM_QUESTIONS.length - 1 ? (lang === 'fr' ? "Valider le Test (30/30)" : "Submit Final Test") : (lang === 'fr' ? "Question Suivante (45s)" : "Next Question")}
+            {currentQIndex === QCM_QUESTIONS.length - 1 ? (lang === 'fr' ? `Valider le Test (${QCM_QUESTIONS.length}/${QCM_QUESTIONS.length})` : "Submit Final Test") : (lang === 'fr' ? "Question Suivante (45s)" : "Next Question")}
           </button>
         </div>
       </div>
