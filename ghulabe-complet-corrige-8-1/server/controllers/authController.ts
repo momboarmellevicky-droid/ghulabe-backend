@@ -314,10 +314,14 @@ export async function listDevelopers(req: Request, res: Response): Promise<void>
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
 
   try {
+    // Corrige un trou de sécurité/confiance : cette requête retournait auparavant TOUS les
+    // développeurs inscrits (y compris en attente ou refusés), visibles par n'importe quelle PME.
+    // Seuls les développeurs approuvés (badge GHULABE CERTIFIED) apparaissent désormais.
     const { data: devs, error } = await supabaseAdmin
       .from('users')
       .select('id, name, country, city, bio, rate_fcfa, portfolio_url, badge_level, rating, missions_completed, specialites')
-      .eq('role', 'dev');
+      .eq('role', 'dev')
+      .eq('verification_status', 'approved');
 
     if (error) {
       res.status(500).json({ error_fr: "Erreur lors de la récupération des développeurs.", details: error.message });
