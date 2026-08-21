@@ -64,7 +64,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
     }, 300);
 
     try {
-      // Appel réel au backend GHULABE (moteur Nuclei + Nmap + SSL Labs API).
+      // Appel réel au backend GHULABE (analyse en-têtes HTTP + SSL/TLS + fichiers exposés).
       // Plus aucune donnée simulée : le score, le temps de scan et les failles
       // renvoyés varient réellement selon le domaine scanné.
       const result = await GhulabeBackend.startScan(targetUrl, consentChecked, accessToken, !accessToken ? contactEmail : undefined, !accessToken ? contactPhone : undefined);
@@ -148,7 +148,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
 
           <div className="flex items-center gap-2 text-xs font-mono text-gray-400 bg-[#0A0A0F] px-3 py-2 rounded-xl border border-white/5">
             <Cpu className="w-4 h-4 text-[#00FF88]" />
-            <span>Nuclei + Nmap + SSL Labs API</span>
+            <span>Analyse En-têtes HTTP + SSL/TLS + Fichiers Exposés</span>
           </div>
         </div>
 
@@ -274,7 +274,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
               ></div>
             </div>
             <div className="flex justify-between items-center mt-2 text-xs font-mono text-gray-400">
-              <span>Moteur : Nuclei / SSL / Nmap</span>
+              <span>Moteur : Headers / SSL / Fichiers Exposés</span>
               <span className="text-[#00FF88] font-bold">{scanProgress}%</span>
             </div>
           </div>
@@ -556,7 +556,7 @@ export const ScanView: React.FC<ScanViewProps> = ({
                     {/* Tech details */}
                     <div className="p-4 rounded-xl bg-[#0D1B2A]/80 border border-white/5 space-y-1">
                       <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">
-                        {lang === 'fr' ? "Détails de Détection Moteur (Nuclei / Nmap / SSL Labs)" : "Engine Probe Details"}
+                        {lang === 'fr' ? "Détails de Détection Moteur (Headers HTTP / SSL-TLS / Fichiers Exposés)" : "Engine Probe Details"}
                       </span>
                       <p className="text-xs sm:text-sm text-gray-200 font-mono">
                         {lang === 'fr' ? finding.tech_details_fr : finding.tech_details_en}

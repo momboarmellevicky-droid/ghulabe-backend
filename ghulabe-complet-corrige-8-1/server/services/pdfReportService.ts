@@ -101,7 +101,7 @@ export async function generateScanReportPdf(
 
   doc.moveDown(1.5);
   doc.fontSize(8).fillColor('#999999').text(
-    `Rapport généré automatiquement par le moteur de scan GHULABE (Nuclei + Nmap + vérification TLS native). Scan ID: ${scanId}`,
+    `Rapport généré automatiquement par le moteur de scan GHULABE (analyse en-têtes HTTP, SSL/TLS natif, fichiers exposés). Scan ID: ${scanId}`,
     { align: 'left' }
   );
 

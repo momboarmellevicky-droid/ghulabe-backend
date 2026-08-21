@@ -76,7 +76,7 @@ export const Footer: React.FC<FooterProps> = ({ lang, onOpenLegal }) => {
             <h4 className="font-display font-bold text-white text-sm tracking-wider uppercase mb-1 font-sans">
               Architecture Sécurité
             </h4>
-            <p className="text-gray-400">⚡ Engine : Nuclei + Nmap</p>
+            <p className="text-gray-400">⚡ Engine : Headers + SSL/TLS + Fichiers Exposés</p>
             <p className="text-gray-400">🛡️ Chiffrement : AES-256 / TLS 1.3</p>
             <p className="text-gray-400">🗄️ Stack : React / Node / PostgreSQL / Redis</p>
             <p className="text-[#00FF88]">🌐 Déploiement : GitHub ➔ Render</p>
