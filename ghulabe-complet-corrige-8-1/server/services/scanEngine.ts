@@ -1,17 +1,20 @@
 import tls from 'tls';
+import net from 'net';
+import dns from 'dns';
 import { generateAuditLog } from '../utils/crypto';
 
 // ============================================================================
 // GHULABE — MOTEUR DE SCAN TECHNIQUE RÉEL
-// Collecte des faits bruts (headers, SSL, fichiers exposés) sur un domaine cible.
-// Aucune interprétation métier ici : ce module ne renvoie que des données
-// factuelles. L'analyse bilingue CEO/dev (ceo_impact, financial_risk, etc.)
-// sera générée séparément (étape suivante : geminiAnalysis.ts) à partir de
-// ces faits.
+// Collecte des faits bruts (headers, SSL, fichiers exposés, ports, DNS mail,
+// cookies) sur un domaine cible. Aucune interprétation métier ici : ce module
+// ne renvoie que des données factuelles. L'analyse bilingue CEO/dev
+// (ceo_impact, financial_risk, etc.) est générée séparément (geminiAnalysis.ts)
+// à partir de ces faits.
 // ============================================================================
 
 const FETCH_TIMEOUT_MS = 8000;
 const TLS_TIMEOUT_MS = 6000;
+const PORT_SCAN_TIMEOUT_MS = 2500;
 
 export interface HeadersCheckResult {
   hsts: boolean;
@@ -19,6 +22,26 @@ export interface HeadersCheckResult {
   x_frame_options: boolean;
   x_content_type_options: boolean;
   raw_headers: Record<string, string>;
+}
+
+export interface CookieSecurityResult {
+  cookies_found: number;
+  cookies_missing_secure: string[];
+  cookies_missing_httponly: string[];
+  cookies_missing_samesite: string[];
+}
+
+export interface OpenPort {
+  port: number;
+  service: string;
+}
+
+export interface DnsMailSecurity {
+  spf_found: boolean;
+  spf_record: string | null;
+  dmarc_found: boolean;
+  dmarc_record: string | null;
+  dmarc_policy: 'none' | 'quarantine' | 'reject' | null;
 }
 
 export interface SSLStatus {
@@ -37,6 +60,9 @@ export interface RawScanFacts {
   ssl_status: SSLStatus;
   exposed_files: string[];
   reachable: boolean;
+  cookie_security: CookieSecurityResult;
+  open_ports: OpenPort[];
+  dns_mail_security: DnsMailSecurity;
 }
 
 /**
@@ -99,6 +125,41 @@ export async function scanSecurityHeaders(hostname: string): Promise<HeadersChec
 }
 
 /**
+ * 1b. Analyse les flags de sécurité des cookies (Secure/HttpOnly/SameSite)
+ * à partir des en-têtes Set-Cookie déjà collectés par scanSecurityHeaders.
+ */
+export function analyzeCookieSecurity(rawHeaders: Record<string, string>): CookieSecurityResult {
+  const setCookieHeader = rawHeaders['set-cookie'];
+  if (!setCookieHeader) {
+    return { cookies_found: 0, cookies_missing_secure: [], cookies_missing_httponly: [], cookies_missing_samesite: [] };
+  }
+
+  // fetch() fusionne plusieurs Set-Cookie avec ', ' — on les sépare prudemment
+  // (une virgule dans une date d'expiration de cookie ne doit pas casser le split)
+  const cookieEntries = setCookieHeader.split(/,(?=\s*[A-Za-z0-9_\-]+=)/);
+
+  const missingSecure: string[] = [];
+  const missingHttpOnly: string[] = [];
+  const missingSameSite: string[] = [];
+
+  for (const entry of cookieEntries) {
+    const name = entry.trim().split('=')[0];
+    if (!name) continue;
+    const lower = entry.toLowerCase();
+    if (!lower.includes('secure')) missingSecure.push(name);
+    if (!lower.includes('httponly')) missingHttpOnly.push(name);
+    if (!lower.includes('samesite')) missingSameSite.push(name);
+  }
+
+  return {
+    cookies_found: cookieEntries.length,
+    cookies_missing_secure: missingSecure,
+    cookies_missing_httponly: missingHttpOnly,
+    cookies_missing_samesite: missingSameSite,
+  };
+}
+
+/**
  * 2. Vérifie le certificat SSL/TLS directement (connexion TLS native, rapide,
  * sans dépendre de l'API externe SSL Labs qui peut prendre plusieurs minutes
  * et ne respecterait pas la contrainte GHULABE < 60 secondes/scan)
@@ -151,10 +212,25 @@ export async function scanSSLCertificate(hostname: string): Promise<SSLStatus> {
 }
 
 /**
- * 3. Vérifie la présence de fichiers sensibles exposés publiquement
+ * 3. Vérifie la présence de fichiers/chemins sensibles exposés publiquement.
+ * Liste étendue (config, backups, VCS, identifiants cloud, logs) plutôt que
+ * les 5 chemins historiques — augmente sensiblement les chances de détecter
+ * une vraie fuite de configuration.
  */
 export async function scanExposedFiles(hostname: string): Promise<string[]> {
-  const filesToCheck = ['.env', '.git/config', 'config.php.bak', 'wp-config.php.bak', '.DS_Store'];
+  const filesToCheck = [
+    '.env', '.env.local', '.env.production',
+    '.git/config', '.git/HEAD',
+    'config.php.bak', 'wp-config.php.bak', 'wp-config.php.old',
+    '.DS_Store', '.htaccess', '.htpasswd',
+    'backup.zip', 'backup.sql', 'database.sql', 'dump.sql',
+    '.aws/credentials', 'credentials.json',
+    'composer.json', 'package.json.bak',
+    'phpinfo.php', 'info.php', 'test.php',
+    'server-status', 'error_log', 'debug.log',
+    '.vscode/sftp.json', 'id_rsa', '.ssh/id_rsa',
+    'admin/config.php', 'web.config.bak',
+  ];
   const exposed: string[] = [];
 
   const checks = filesToCheck.map(async (file) => {
@@ -174,6 +250,94 @@ export async function scanExposedFiles(hostname: string): Promise<string[]> {
 }
 
 /**
+ * 4. Scan des ports TCP courants (connexion directe, pas de dépendance nmap).
+ * Détecte les services exposés par erreur au-delà du 443 web standard :
+ * bases de données, SSH mal configuré, ports d'administration oubliés.
+ */
+const COMMON_PORTS: { port: number; service: string }[] = [
+  { port: 21, service: 'FTP' },
+  { port: 22, service: 'SSH' },
+  { port: 23, service: 'Telnet' },
+  { port: 25, service: 'SMTP' },
+  { port: 3306, service: 'MySQL' },
+  { port: 5432, service: 'PostgreSQL' },
+  { port: 6379, service: 'Redis' },
+  { port: 27017, service: 'MongoDB' },
+  { port: 3389, service: 'RDP' },
+  { port: 8080, service: 'HTTP-Alt/Admin' },
+  { port: 9200, service: 'Elasticsearch' },
+];
+
+function checkPort(hostname: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let resolved = false;
+
+    const finish = (open: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      socket.destroy();
+      resolve(open);
+    };
+
+    socket.setTimeout(PORT_SCAN_TIMEOUT_MS);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+
+    socket.connect(port, hostname);
+  });
+}
+
+export async function scanCommonPorts(hostname: string): Promise<OpenPort[]> {
+  const results = await Promise.allSettled(
+    COMMON_PORTS.map(async ({ port, service }) => ({ port, service, open: await checkPort(hostname, port) }))
+  );
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<{ port: number; service: string; open: boolean }> => r.status === 'fulfilled' && r.value.open)
+    .map((r) => ({ port: r.value.port, service: r.value.service }));
+}
+
+/**
+ * 5. Vérifie la sécurité email du domaine (protection anti-spoofing) :
+ * enregistrement SPF et politique DMARC. Point souvent négligé par les PME
+ * et très concret pour un CEO (usurpation d'email, phishing sous son nom).
+ */
+function resolveTxtSafe(hostname: string): Promise<string[][]> {
+  return new Promise((resolve) => {
+    dns.resolveTxt(hostname, (err, records) => {
+      if (err) resolve([]);
+      else resolve(records);
+    });
+  });
+}
+
+export async function scanDnsMailSecurity(hostname: string): Promise<DnsMailSecurity> {
+  const [spfRecords, dmarcRecords] = await Promise.all([
+    resolveTxtSafe(hostname),
+    resolveTxtSafe(`_dmarc.${hostname}`),
+  ]);
+
+  const spfFlat = spfRecords.map((r) => r.join('')).find((r) => r.toLowerCase().startsWith('v=spf1'));
+  const dmarcFlat = dmarcRecords.map((r) => r.join('')).find((r) => r.toLowerCase().startsWith('v=dmarc1'));
+
+  let dmarcPolicy: 'none' | 'quarantine' | 'reject' | null = null;
+  if (dmarcFlat) {
+    const match = dmarcFlat.match(/p=(none|quarantine|reject)/i);
+    if (match) dmarcPolicy = match[1].toLowerCase() as 'none' | 'quarantine' | 'reject';
+  }
+
+  return {
+    spf_found: !!spfFlat,
+    spf_record: spfFlat || null,
+    dmarc_found: !!dmarcFlat,
+    dmarc_record: dmarcFlat || null,
+    dmarc_policy: dmarcPolicy,
+  };
+}
+
+/**
  * Orchestrateur principal : lance les 3 vérifications en parallèle
  * et renvoie les faits bruts, sans aucune interprétation métier.
  */
@@ -190,10 +354,12 @@ export async function runFullScan(url: string, userId: string, ip: string): Prom
     details: 'Lancement du moteur de scan réel (headers + SSL + fichiers exposés).',
   });
 
-  const [headersResult, sslResult, exposedResult] = await Promise.allSettled([
+  const [headersResult, sslResult, exposedResult, portsResult, dnsMailResult] = await Promise.allSettled([
     scanSecurityHeaders(hostname),
     scanSSLCertificate(hostname),
     scanExposedFiles(hostname),
+    scanCommonPorts(hostname),
+    scanDnsMailSecurity(hostname),
   ]);
 
   const headers_checked: HeadersCheckResult =
@@ -208,6 +374,15 @@ export async function runFullScan(url: string, userId: string, ip: string): Prom
 
   const exposed_files: string[] = exposedResult.status === 'fulfilled' ? exposedResult.value : [];
 
+  const open_ports: OpenPort[] = portsResult.status === 'fulfilled' ? portsResult.value : [];
+
+  const dns_mail_security: DnsMailSecurity =
+    dnsMailResult.status === 'fulfilled'
+      ? dnsMailResult.value
+      : { spf_found: false, spf_record: null, dmarc_found: false, dmarc_record: null, dmarc_policy: null };
+
+  const cookie_security = analyzeCookieSecurity(headers_checked.raw_headers);
+
   const reachable = headersResult.status === 'fulfilled' && Object.keys(headers_checked.raw_headers).length > 0;
 
   const duration_ms = Date.now() - startedAt;
@@ -218,7 +393,7 @@ export async function runFullScan(url: string, userId: string, ip: string): Prom
     ipAddress: ip,
     targetUrl: hostname,
     status: 'SUCCESS',
-    details: `Scan technique terminé en ${duration_ms}ms. Joignable: ${reachable}. Fichiers exposés: ${exposed_files.length}.`,
+    details: `Scan technique terminé en ${duration_ms}ms. Joignable: ${reachable}. Fichiers exposés: ${exposed_files.length}. Ports ouverts: ${open_ports.length}. SPF: ${dns_mail_security.spf_found}. DMARC: ${dns_mail_security.dmarc_found}.`,
   });
 
   return {
@@ -230,5 +405,8 @@ export async function runFullScan(url: string, userId: string, ip: string): Prom
     ssl_status,
     exposed_files,
     reachable,
+    cookie_security,
+    open_ports,
+    dns_mail_security,
   };
 }

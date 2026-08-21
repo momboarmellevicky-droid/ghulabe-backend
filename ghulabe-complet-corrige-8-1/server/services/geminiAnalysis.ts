@@ -98,6 +98,25 @@ function buildUserPrompt(facts: RawScanFacts): string {
     '',
     '--- Fichiers sensibles exposés publiquement ---',
     facts.exposed_files.length > 0 ? facts.exposed_files.join(', ') : 'Aucun fichier sensible détecté',
+    '',
+    '--- Ports réseau ouverts détectés (au-delà du 443 web standard) ---',
+    facts.open_ports.length > 0
+      ? facts.open_ports.map((p) => `${p.port} (${p.service})`).join(', ')
+      : 'Aucun port sensible ouvert détecté',
+    '',
+    '--- Sécurité email du domaine (anti-usurpation) ---',
+    `SPF configuré : ${facts.dns_mail_security.spf_found ? 'oui — ' + facts.dns_mail_security.spf_record : 'ABSENT'}`,
+    `DMARC configuré : ${facts.dns_mail_security.dmarc_found ? 'oui — politique: ' + facts.dns_mail_security.dmarc_policy : 'ABSENT'}`,
+    '',
+    '--- Sécurité des cookies ---',
+    facts.cookie_security.cookies_found === 0
+      ? 'Aucun cookie observé sur cette page'
+      : [
+          `${facts.cookie_security.cookies_found} cookie(s) détecté(s)`,
+          facts.cookie_security.cookies_missing_secure.length > 0 ? `Sans flag Secure : ${facts.cookie_security.cookies_missing_secure.join(', ')}` : '',
+          facts.cookie_security.cookies_missing_httponly.length > 0 ? `Sans flag HttpOnly : ${facts.cookie_security.cookies_missing_httponly.join(', ')}` : '',
+          facts.cookie_security.cookies_missing_samesite.length > 0 ? `Sans flag SameSite : ${facts.cookie_security.cookies_missing_samesite.join(', ')}` : '',
+        ].filter(Boolean).join(' | '),
   ];
 
   return lines.filter(Boolean).join('\n');

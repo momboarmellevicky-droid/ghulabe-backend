@@ -18,7 +18,10 @@ export function computeSecurityScore(
   headers: { hsts: boolean; csp: boolean; x_frame_options: boolean; x_content_type_options: boolean },
   ssl: { valid: boolean; expires_in_days: number },
   exposedFilesCount: number,
-  findings: VulnerabilityFinding[]
+  findings: VulnerabilityFinding[],
+  openPortsCount: number = 0,
+  dnsMail?: { spf_found: boolean; dmarc_found: boolean },
+  cookieIssuesCount: number = 0
 ): number {
   let score = 10;
 
@@ -31,6 +34,18 @@ export function computeSecurityScore(
   else if (ssl.expires_in_days < 14) score -= 1;
 
   score -= Math.min(exposedFilesCount, 3) * 1;
+
+  // Ports réseau sensibles ouverts (base de données, admin, SSH mal configuré)
+  score -= Math.min(openPortsCount, 3) * 1;
+
+  // Sécurité email du domaine (usurpation/phishing sous le nom de la PME)
+  if (dnsMail) {
+    if (!dnsMail.spf_found) score -= 0.5;
+    if (!dnsMail.dmarc_found) score -= 0.5;
+  }
+
+  // Cookies mal protégés (vol de session)
+  score -= Math.min(cookieIssuesCount, 3) * 0.3;
 
   for (const finding of findings) {
     if (finding.severity === 'critique') score -= 2;
@@ -112,7 +127,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
       });
     }
 
-    const score = computeSecurityScore(facts.headers_checked, facts.ssl_status, facts.exposed_files.length, findings);
+    const score = computeSecurityScore(facts.headers_checked, facts.ssl_status, facts.exposed_files.length, findings, facts.open_ports.length, facts.dns_mail_security, facts.cookie_security.cookies_missing_secure.length + facts.cookie_security.cookies_missing_httponly.length);
     const durationSeconds = Math.round(facts.duration_ms / 1000);
     const domainStatus = score >= 7 ? 'safe' : score >= 6 ? 'warning' : 'critical';
 
@@ -663,7 +678,10 @@ export async function previewScan(req: Request, res: Response): Promise<void> {
       facts.headers_checked,
       facts.ssl_status,
       facts.exposed_files.length,
-      findings
+      findings,
+      facts.open_ports.length,
+      facts.dns_mail_security,
+      facts.cookie_security.cookies_missing_secure.length + facts.cookie_security.cookies_missing_httponly.length
     );
 
     const criticalCount = findings.filter((f) => f.severity === 'critique').length;
