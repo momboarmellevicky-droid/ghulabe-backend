@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { generateAuditLog } from '../utils/crypto';
+import { supabaseAdmin } from '../config/supabase';
 
-// Simulation de cache Redis en mémoire pour le rate limiting et les scans en cours
-const requestCounts = new Map<string, { count: number; firstRequestTime: number }>();
-const scanCounts = new Map<string, { count: number; resetTime: number }>();
+// Rate limiting persistant via Supabase (table rate_limits + fonction RPC increment_rate_limit).
+// Remplace l'ancien cache en mémoire (Map) qui se réinitialisait à chaque redéploiement Render.
+// En cas d'erreur Supabase (ex. panne réseau), le limiteur "fail open" : la requête passe et
+// l'incident est loggé, pour ne jamais bloquer le service à cause d'un souci de rate limiting.
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 100; // Strict : 100 requêtes / min
@@ -11,21 +13,39 @@ const MAX_REQUESTS_PER_WINDOW = 100; // Strict : 100 requêtes / min
 const SCAN_WINDOW_MS = 60 * 60 * 1000; // 1 heure
 const MAX_SCANS_PER_HOUR = 10; // Strict : 10 scans / heure par IP
 
+interface RateLimitCheckResult {
+  count: number;
+  window_end: string;
+}
+
+async function checkRateLimit(limiterKey: string, windowMs: number): Promise<RateLimitCheckResult | null> {
+  const { data, error } = await supabaseAdmin.rpc('increment_rate_limit', {
+    p_key: limiterKey,
+    p_window_ms: windowMs,
+    p_now: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error('[RateLimiter] Erreur Supabase (fail-open, requête autorisée) :', error.message);
+    return null;
+  }
+
+  return Array.isArray(data) ? data[0] : data;
+}
+
 /**
  * Rate limiter strict sur toutes les routes API
  */
-export function apiRateLimiter(req: Request, res: Response, next: NextFunction): void {
+export async function apiRateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
-  const now = Date.now();
+  const result = await checkRateLimit(`api:${ip}`, RATE_LIMIT_WINDOW_MS);
 
-  const record = requestCounts.get(ip);
-  if (!record || now - record.firstRequestTime > RATE_LIMIT_WINDOW_MS) {
-    requestCounts.set(ip, { count: 1, firstRequestTime: now });
-    return next();
+  if (!result) {
+    next();
+    return;
   }
 
-  record.count += 1;
-  if (record.count > MAX_REQUESTS_PER_WINDOW) {
+  if (result.count > MAX_REQUESTS_PER_WINDOW) {
     generateAuditLog({
       action: 'API_RATE_LIMIT_EXCEEDED',
       ipAddress: ip,
@@ -47,17 +67,16 @@ export function apiRateLimiter(req: Request, res: Response, next: NextFunction):
 /**
  * Rate limiter dédié aux lancements de scans externes
  */
-export function scanRateLimiter(req: Request, res: Response, next: NextFunction): void {
+export async function scanRateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
-  const now = Date.now();
+  const result = await checkRateLimit(`scan:${ip}`, SCAN_WINDOW_MS);
 
-  const record = scanCounts.get(ip);
-  if (!record || now >= record.resetTime) {
-    scanCounts.set(ip, { count: 1, resetTime: now + SCAN_WINDOW_MS });
-    return next();
+  if (!result) {
+    next();
+    return;
   }
 
-  if (record.count >= MAX_SCANS_PER_HOUR) {
+  if (result.count > MAX_SCANS_PER_HOUR) {
     generateAuditLog({
       action: 'SCAN_RATE_LIMIT_EXCEEDED',
       ipAddress: ip,
@@ -73,6 +92,5 @@ export function scanRateLimiter(req: Request, res: Response, next: NextFunction)
     return;
   }
 
-  record.count += 1;
   next();
 }
