@@ -92,6 +92,26 @@ app.use('*', (req: Request, res: Response) => {
   res.status(404).json({ error: "Endpoint non trouvé." });
 });
 
+// Gestionnaire d'erreur global : sans ce middleware, une exception non interceptée
+// (avant qu'une route ne réponde) tombe sur le gestionnaire par défaut d'Express, qui
+// renvoie une page HTML complète avec la pile d'erreur (stack trace) — une réponse
+// volumineuse et imprévisible, notamment problématique pour les déclencheurs externes
+// (cron-job.org) qui limitent la taille de sortie attendue. On répond toujours en JSON
+// compact, sans jamais exposer la pile d'erreur au client.
+app.use((err: any, req: Request, res: Response, _next: express.NextFunction) => {
+  generateAuditLog({
+    action: 'UNHANDLED_SERVER_ERROR',
+    ipAddress: req.ip || req.socket.remoteAddress || 'unknown-ip',
+    targetUrl: req.originalUrl,
+    status: 'FAILED',
+    details: `Erreur non interceptée: ${err?.message || 'inconnue'}`,
+  });
+  if (res.headersSent) {
+    return;
+  }
+  res.status(500).json({ error_fr: 'Erreur interne du serveur.', error_en: 'Internal server error.' });
+});
+
 // ============================================================================
 // 3. DÉMARRAGE DU SERVEUR
 // ============================================================================
