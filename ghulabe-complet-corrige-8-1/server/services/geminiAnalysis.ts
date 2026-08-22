@@ -249,3 +249,147 @@ export async function generateFindingsFromScan(
     clearTimeout(timer);
   }
 }
+
+/**
+ * Génère des failles de base directement à partir des faits bruts (sans IA).
+ * Garantit que le rapport n'est JAMAIS vide/contradictoire avec le score
+ * quand des problèmes réels existent, même si Groq est indisponible (clé
+ * manquante, quota, timeout, panne). Ces verdicts sont plus sommaires que
+ * ceux générés par l'IA, mais restent 100% exacts car dérivés des faits
+ * techniques constatés, pas d'un texte généré.
+ */
+export function generateDeterministicFindings(facts: RawScanFacts): VulnerabilityFinding[] {
+  const findings: VulnerabilityFinding[] = [];
+  let idx = 0;
+  const next = () => `f-fallback-${Date.now()}-${idx++}`;
+
+  if (!facts.ssl_status.valid) {
+    findings.push({
+      id: next(),
+      title_fr: 'Certificat SSL/TLS invalide ou absent',
+      title_en: 'Invalid or missing SSL/TLS certificate',
+      severity: 'critique',
+      category: 'Chiffrement',
+      ceo_impact_fr: 'Les visiteurs voient un avertissement de sécurité dans leur navigateur, ce qui nuit gravement à la confiance et peut faire fuir des clients.',
+      ceo_impact_en: 'Visitors see a security warning in their browser, seriously harming trust and potentially driving customers away.',
+      financial_risk_fr: 'Perte de trafic et de conversions ; risque de sanction pour non-conformité RGPD/données.',
+      financial_risk_en: 'Loss of traffic and conversions; risk of GDPR/data compliance penalties.',
+      urgency_fr: 'Immédiate',
+      urgency_en: 'Immediate',
+      tech_details_fr: `Certificat invalide (émetteur: ${facts.ssl_status.issuer}). ${facts.ssl_status.error || ''}`.trim(),
+      tech_details_en: `Invalid certificate (issuer: ${facts.ssl_status.issuer}). ${facts.ssl_status.error || ''}`.trim(),
+      remediation_code: 'Installer un certificat SSL/TLS valide (ex: Let\'s Encrypt, gratuit et automatisable).',
+      remediation_lang: 'texte',
+    });
+  }
+
+  const missingHeaders: { key: keyof RawScanFacts['headers_checked']; label_fr: string; label_en: string }[] = [
+    { key: 'hsts', label_fr: 'Strict-Transport-Security (HSTS)', label_en: 'Strict-Transport-Security (HSTS)' },
+    { key: 'csp', label_fr: 'Content-Security-Policy (CSP)', label_en: 'Content-Security-Policy (CSP)' },
+    { key: 'x_frame_options', label_fr: 'X-Frame-Options', label_en: 'X-Frame-Options' },
+    { key: 'x_content_type_options', label_fr: 'X-Content-Type-Options', label_en: 'X-Content-Type-Options' },
+  ];
+  const missing = missingHeaders.filter((h) => !facts.headers_checked[h.key]);
+  if (missing.length > 0) {
+    findings.push({
+      id: next(),
+      title_fr: `${missing.length} en-tête(s) de sécurité HTTP manquant(s)`,
+      title_en: `${missing.length} missing HTTP security header(s)`,
+      severity: missing.length >= 3 ? 'eleve' : 'moyen',
+      category: 'Configuration serveur',
+      ceo_impact_fr: 'Le site est plus vulnérable aux attaques courantes (détournement de clic, injection de script) qu\'un site correctement configuré.',
+      ceo_impact_en: 'The site is more vulnerable to common attacks (clickjacking, script injection) than a properly configured one.',
+      financial_risk_fr: 'Risque accru de compromission exploitée pour du phishing ou du vol de données clients.',
+      financial_risk_en: 'Increased risk of compromise exploited for phishing or customer data theft.',
+      urgency_fr: missing.length >= 3 ? 'Sous 7 jours' : 'Sous 30 jours',
+      urgency_en: missing.length >= 3 ? 'Within 7 days' : 'Within 30 days',
+      tech_details_fr: `En-têtes absents : ${missing.map((h) => h.label_fr).join(', ')}.`,
+      tech_details_en: `Missing headers: ${missing.map((h) => h.label_en).join(', ')}.`,
+      remediation_code: missing.map((h) => `${h.label_fr}: à ajouter côté serveur/CDN`).join('\n'),
+      remediation_lang: 'texte',
+    });
+  }
+
+  if (facts.exposed_files.length > 0) {
+    findings.push({
+      id: next(),
+      title_fr: `${facts.exposed_files.length} fichier(s) sensible(s) exposé(s) publiquement`,
+      title_en: `${facts.exposed_files.length} sensitive file(s) publicly exposed`,
+      severity: 'critique',
+      category: 'Fuite de configuration',
+      ceo_impact_fr: 'Des fichiers contenant potentiellement des identifiants ou du code source sont accessibles à n\'importe qui.',
+      ceo_impact_en: 'Files potentially containing credentials or source code are accessible to anyone.',
+      financial_risk_fr: 'Compromission complète possible du site ou de la base de données si des identifiants sont exposés.',
+      financial_risk_en: 'Full site or database compromise possible if credentials are exposed.',
+      urgency_fr: 'Immédiate',
+      urgency_en: 'Immediate',
+      tech_details_fr: `Chemins exposés : ${facts.exposed_files.join(', ')}.`,
+      tech_details_en: `Exposed paths: ${facts.exposed_files.join(', ')}.`,
+      remediation_code: 'Restreindre l\'accès public à ces fichiers via la configuration serveur (.htaccess, nginx.conf) ou les supprimer.',
+      remediation_lang: 'texte',
+    });
+  }
+
+  if (facts.open_ports.length > 0) {
+    findings.push({
+      id: next(),
+      title_fr: `${facts.open_ports.length} port(s) réseau sensible(s) ouvert(s)`,
+      title_en: `${facts.open_ports.length} sensitive network port(s) open`,
+      severity: 'eleve',
+      category: 'Exposition réseau',
+      ceo_impact_fr: 'Des services internes (base de données, administration) sont potentiellement accessibles depuis Internet.',
+      ceo_impact_en: 'Internal services (database, administration) are potentially accessible from the Internet.',
+      financial_risk_fr: 'Un attaquant peut tenter de forcer l\'accès à ces services pour voler ou détruire des données.',
+      financial_risk_en: 'An attacker can attempt to force access to these services to steal or destroy data.',
+      urgency_fr: 'Sous 7 jours',
+      urgency_en: 'Within 7 days',
+      tech_details_fr: `Ports ouverts : ${facts.open_ports.map((p) => `${p.port} (${p.service})`).join(', ')}.`,
+      tech_details_en: `Open ports: ${facts.open_ports.map((p) => `${p.port} (${p.service})`).join(', ')}.`,
+      remediation_code: 'Fermer ces ports au niveau du pare-feu, ou les restreindre à des IP de confiance uniquement.',
+      remediation_lang: 'texte',
+    });
+  }
+
+  if (!facts.dns_mail_security.spf_found || !facts.dns_mail_security.dmarc_found) {
+    findings.push({
+      id: next(),
+      title_fr: 'Protection anti-usurpation email incomplète (SPF/DMARC)',
+      title_en: 'Incomplete anti-spoofing email protection (SPF/DMARC)',
+      severity: 'moyen',
+      category: 'Sécurité email',
+      ceo_impact_fr: 'Des personnes malveillantes peuvent envoyer des emails de phishing qui semblent provenir de votre entreprise.',
+      ceo_impact_en: 'Malicious actors can send phishing emails that appear to come from your company.',
+      financial_risk_fr: 'Atteinte à la réputation de la marque, risque pour les clients ciblés par usurpation.',
+      financial_risk_en: 'Damage to brand reputation, risk to customers targeted by impersonation.',
+      urgency_fr: 'Sous 30 jours',
+      urgency_en: 'Within 30 days',
+      tech_details_fr: `SPF : ${facts.dns_mail_security.spf_found ? 'présent' : 'absent'}. DMARC : ${facts.dns_mail_security.dmarc_found ? 'présent' : 'absent'}.`,
+      tech_details_en: `SPF: ${facts.dns_mail_security.spf_found ? 'present' : 'missing'}. DMARC: ${facts.dns_mail_security.dmarc_found ? 'present' : 'missing'}.`,
+      remediation_code: 'Ajouter les enregistrements DNS TXT manquants (SPF et/ou DMARC) auprès de l\'hébergeur du domaine.',
+      remediation_lang: 'texte',
+    });
+  }
+
+  const cookieIssues = facts.cookie_security.cookies_missing_secure.length + facts.cookie_security.cookies_missing_httponly.length;
+  if (cookieIssues > 0) {
+    findings.push({
+      id: next(),
+      title_fr: 'Cookies sans protection suffisante',
+      title_en: 'Cookies without sufficient protection',
+      severity: 'moyen',
+      category: 'Sécurité session',
+      ceo_impact_fr: 'Les sessions des utilisateurs sont plus facilement volables, ce qui peut mener à des usurpations de compte.',
+      ceo_impact_en: 'User sessions are more easily stolen, which can lead to account takeover.',
+      financial_risk_fr: 'Risque de fraude sur les comptes clients ou administrateurs.',
+      financial_risk_en: 'Risk of fraud on customer or administrator accounts.',
+      urgency_fr: 'Sous 30 jours',
+      urgency_en: 'Within 30 days',
+      tech_details_fr: `Cookies sans flag Secure : ${facts.cookie_security.cookies_missing_secure.join(', ') || 'aucun'}. Sans HttpOnly : ${facts.cookie_security.cookies_missing_httponly.join(', ') || 'aucun'}.`,
+      tech_details_en: `Cookies without Secure flag: ${facts.cookie_security.cookies_missing_secure.join(', ') || 'none'}. Without HttpOnly: ${facts.cookie_security.cookies_missing_httponly.join(', ') || 'none'}.`,
+      remediation_code: 'Ajouter les flags Secure et HttpOnly à tous les cookies de session.',
+      remediation_lang: 'texte',
+    });
+  }
+
+  return findings;
+}

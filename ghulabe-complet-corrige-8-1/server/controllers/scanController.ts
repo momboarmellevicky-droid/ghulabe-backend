@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 import { generateAuditLog } from '../utils/crypto';
 import { runFullScan } from '../services/scanEngine';
-import { generateFindingsFromScan, VulnerabilityFinding } from '../services/geminiAnalysis';
+import { generateFindingsFromScan, generateDeterministicFindings, VulnerabilityFinding } from '../services/geminiAnalysis';
 import { generateScanReportPdf } from '../services/pdfReportService';
 import { sendWhatsAppAlert } from '../services/whatsappService';
 import { sendScanReportEmail } from '../services/emailService';
@@ -103,7 +103,12 @@ export async function startScan(req: Request, res: Response): Promise<void> {
     const facts = await runFullScan(cleanUrl, userId || 'ANONYMOUS', ip);
 
     // 2. Analyse IA Gemini à partir des faits réels (jamais de faille inventée hors faits constatés)
-    const findings = await generateFindingsFromScan(facts, userId || 'ANONYMOUS', ip);
+    // Fallback déterministe si l'IA échoue ou ne renvoie rien : évite un rapport
+    // vide/contradictoire avec le score quand des problèmes réels existent.
+    let findings = await generateFindingsFromScan(facts, userId || 'ANONYMOUS', ip);
+    if (findings.length === 0) {
+      findings = generateDeterministicFindings(facts);
+    }
 
     // 2b. Vérification de réputation VirusTotal (détection phishing/malveillance connue)
     const reputation = await checkUrlReputation(cleanUrl, userId || 'ANONYMOUS', ip);
@@ -672,7 +677,10 @@ export async function previewScan(req: Request, res: Response): Promise<void> {
   });
   try {
     const facts = await runFullScan(cleanUrl, 'ANONYMOUS', ip);
-    const findings = await generateFindingsFromScan(facts, 'ANONYMOUS', ip);
+    let findings = await generateFindingsFromScan(facts, 'ANONYMOUS', ip);
+    if (findings.length === 0) {
+      findings = generateDeterministicFindings(facts);
+    }
 
     const score = computeSecurityScore(
       facts.headers_checked,

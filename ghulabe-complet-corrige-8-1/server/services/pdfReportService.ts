@@ -49,6 +49,17 @@ export async function generateScanReportPdf(
   doc.text(`Émetteur : ${facts.ssl_status.issuer}`);
   doc.moveDown(0.5);
   doc.text(`Fichiers sensibles exposés : ${facts.exposed_files.length > 0 ? facts.exposed_files.join(', ') : 'Aucun'}`);
+  doc.moveDown(0.5);
+  doc.text(`Ports réseau sensibles ouverts : ${facts.open_ports.length > 0 ? facts.open_ports.map((p) => `${p.port} (${p.service})`).join(', ') : 'Aucun'}`);
+  doc.moveDown(0.5);
+  doc.text(`SPF configuré : ${facts.dns_mail_security.spf_found ? 'Oui' : 'Non'}`);
+  doc.text(`DMARC configuré : ${facts.dns_mail_security.dmarc_found ? `Oui (politique: ${facts.dns_mail_security.dmarc_policy})` : 'Non'}`);
+  doc.moveDown(0.5);
+  doc.text(`Cookies analysés : ${facts.cookie_security.cookies_found}`);
+  if (facts.cookie_security.cookies_found > 0) {
+    doc.text(`  Sans flag Secure : ${facts.cookie_security.cookies_missing_secure.length > 0 ? facts.cookie_security.cookies_missing_secure.join(', ') : 'Aucun'}`);
+    doc.text(`  Sans flag HttpOnly : ${facts.cookie_security.cookies_missing_httponly.length > 0 ? facts.cookie_security.cookies_missing_httponly.join(', ') : 'Aucun'}`);
+  }
   doc.moveDown(1.5);
 
   doc.fontSize(14).fillColor('#000000').text('Plan d\'Action Priorisé', { underline: true });
