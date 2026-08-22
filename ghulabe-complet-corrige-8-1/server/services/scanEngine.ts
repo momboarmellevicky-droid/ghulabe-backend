@@ -76,7 +76,7 @@ function normalizeHostname(url: string): string {
 /**
  * Effectue un fetch avec timeout strict (protection contre les cibles lentes/hostiles)
  */
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response | null> {
+export async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -408,5 +408,79 @@ export async function runFullScan(url: string, userId: string, ip: string): Prom
     cookie_security,
     open_ports,
     dns_mail_security,
+  };
+}
+
+// ============================================================================
+// GHULABE — HEARTBEAT RAPIDE (surveillance rapprochée, plan Gardien)
+// Contrairement à runFullScan (25 fichiers + 11 ports + DNS mail, coûteux,
+// gardé en cadence hebdomadaire), le heartbeat est volontairement léger pour
+// pouvoir tourner toutes les 15-30 minutes sans surcharger le moteur ni les
+// domaines cibles : uptime, validité du certificat SSL, et empreinte du
+// contenu de la page d'accueil pour détecter un défacement (piratage visible)
+// bien plus vite qu'un scan hebdomadaire ne le permettrait.
+// ============================================================================
+
+import crypto from 'crypto';
+
+export interface HeartbeatResult {
+  hostname: string;
+  checked_at: string;
+  is_online: boolean;
+  http_status: number | null;
+  response_time_ms: number | null;
+  ssl_valid: boolean;
+  ssl_expires_in_days: number | null;
+  content_hash: string | null;
+}
+
+/**
+ * Calcule une empreinte SHA-256 du contenu HTML de la page d'accueil.
+ * Une variation brutale entre deux checks (hash différent) est un signal
+ * classique de défacement (remplacement de contenu suite à intrusion) ou
+ * d'injection malveillante (redirection, script inséré).
+ */
+function hashContent(html: string): string {
+  return crypto.createHash('sha256').update(html).digest('hex');
+}
+
+export async function runQuickHeartbeat(hostname: string): Promise<HeartbeatResult> {
+  const checked_at = new Date().toISOString();
+  const startedAt = Date.now();
+
+  const [pageResult, sslResult] = await Promise.allSettled([
+    fetchWithTimeout(`https://${hostname}`, 6000),
+    scanSSLCertificate(hostname),
+  ]);
+
+  const response_time_ms = Date.now() - startedAt;
+
+  let is_online = false;
+  let http_status: number | null = null;
+  let content_hash: string | null = null;
+
+  if (pageResult.status === 'fulfilled' && pageResult.value) {
+    is_online = true;
+    http_status = pageResult.value.status;
+    try {
+      const html = await pageResult.value.text();
+      content_hash = hashContent(html);
+    } catch {
+      content_hash = null;
+    }
+  }
+
+  const ssl_valid = sslResult.status === 'fulfilled' ? sslResult.value.valid : false;
+  const ssl_expires_in_days = sslResult.status === 'fulfilled' ? sslResult.value.expires_in_days : null;
+
+  return {
+    hostname,
+    checked_at,
+    is_online,
+    http_status,
+    response_time_ms: is_online ? response_time_ms : null,
+    ssl_valid,
+    ssl_expires_in_days,
+    content_hash,
   };
 }
