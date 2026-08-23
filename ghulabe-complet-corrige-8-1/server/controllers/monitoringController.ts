@@ -168,7 +168,7 @@ export async function runQuickHeartbeatCron(req: Request, res: Response): Promis
   try {
     const { data: gardienDomains, error: fetchError } = await supabaseAdmin
       .from('domains')
-      .select('id, url, user_id, content_hash, was_online, users!inner(id, email, phone, name, plan)')
+      .select('id, url, user_id, content_hash, was_online, was_ssl_valid, users!inner(id, email, phone, name, plan)')
       .eq('users.plan', 'gardien');
 
     if (fetchError) throw fetchError;
@@ -191,8 +191,10 @@ export async function runQuickHeartbeatCron(req: Request, res: Response): Promis
           });
         }
 
-        // 2. Certificat SSL devenu invalide brutalement
-        if (heartbeat.is_online && !heartbeat.ssl_valid) {
+        // 2. Certificat SSL devenu invalide — n'alerte qu'au moment où l'état bascule
+        // (était valide ou jamais vérifié -> devient invalide), pas à chaque passage
+        // du heartbeat tant que le problème persiste (évite les rafales du même mail).
+        if (heartbeat.is_online && !heartbeat.ssl_valid && domain.was_ssl_valid !== false) {
           alerts.push({
             severity: 'critique',
             messageFr: `🔴 GHULABE ALERTE : Le certificat SSL de ${domain.url} est INVALIDE. Vos visiteurs voient un avertissement de sécurité.`,
@@ -219,6 +221,7 @@ export async function runQuickHeartbeatCron(req: Request, res: Response): Promis
           .from('domains')
           .update({
             was_online: heartbeat.is_online,
+            was_ssl_valid: heartbeat.ssl_valid,
             content_hash: heartbeat.content_hash || domain.content_hash,
             last_heartbeat_at: heartbeat.checked_at,
           })
