@@ -80,7 +80,7 @@ export async function generateScanReportPdf(
     doc.moveDown(1);
 
     doc.fontSize(14).fillColor('#FF2D2D').text(
-      `🔒 Passez au Premium pour voir le détail de chaque faille`,
+      `Passez au Premium pour voir le détail de chaque faille`,
       { width: 495 }
     );
     doc.moveDown(0.3);
