@@ -1,4 +1,5 @@
 import { generateAuditLog } from '../utils/crypto';
+import nodemailer from 'nodemailer';
 
 // ============================================================================
 // GHULABE — ENVOI RÉEL DU CODE 2FA PAR EMAIL
@@ -7,11 +8,48 @@ import { generateAuditLog } from '../utils/crypto';
 // Render gratuites. Si RESEND_API_KEY est absente, l'envoi est simplement
 // ignoré (retour false) plutôt que de faire planter la connexion — utile
 // en développement local sans clé configurée.
+//
+// Repli SMTP (nodemailer) : Resend ne peut envoyer qu'à l'adresse email du
+// propriétaire du compte tant que le domaine d'envoi (ghulabe.com) n'est pas
+// vérifié (enregistrements DNS). En attendant cette vérification, un envoi
+// Resend refusé (ou une clé absente) bascule automatiquement sur SMTP si les
+// identifiants SMTP_HOST/SMTP_USER/SMTP_PASS sont configurés sur Render.
 // ============================================================================
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || 'onboarding@resend.dev';
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'GHULABE Sécurité';
+
+let smtpTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
+function getSmtpTransporter() {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+  if (!smtpTransporter) {
+    smtpTransporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure: process.env.SMTP_PORT === '465',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+  }
+  return smtpTransporter;
+}
+
+async function sendViaSmtpFallback(toEmail: string, subject: string, html: string, text: string): Promise<boolean> {
+  const transporter = getSmtpTransporter();
+  if (!transporter) return false;
+  try {
+    await transporter.sendMail({
+      from: `"${SMTP_FROM_NAME}" <${process.env.SMTP_USER}>`,
+      to: toEmail,
+      subject,
+      html,
+      text,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function buildEmailContent(otp: string, lang: 'fr' | 'en'): { subject: string; html: string; text: string } {
   if (lang === 'en') {
@@ -445,12 +483,28 @@ export async function sendPasswordResetEmail(
   ip: string
 ): Promise<boolean> {
   if (!RESEND_API_KEY) {
+    const subjectFallback = lang === 'en' ? 'Reset your GHULABE password' : 'Réinitialisez votre mot de passe GHULABE';
+    const textFallback = lang === 'en'
+      ? `Your GHULABE password reset code is: ${otp}. This code expires in 15 minutes.`
+      : `Votre code de réinitialisation GHULABE est : ${otp}. Ce code expire dans 15 minutes.`;
+    const htmlFallback = `<p>${textFallback}</p>`;
+    const smtpSent = await sendViaSmtpFallback(toEmail, subjectFallback, htmlFallback, textFallback);
+    if (smtpSent) {
+      generateAuditLog({
+        action: 'EMAIL_PASSWORD_RESET_SENT_VIA_SMTP_FALLBACK',
+        userId,
+        ipAddress: ip,
+        status: 'SUCCESS',
+        details: `Email reset envoyé via SMTP (RESEND_API_KEY absente) à ${toEmail}.`,
+      });
+      return true;
+    }
     generateAuditLog({
       action: 'EMAIL_PASSWORD_RESET_SKIPPED',
       userId,
       ipAddress: ip,
       status: 'BLOCKED',
-      details: `Envoi email reset ignoré (RESEND_API_KEY non configurée) pour ${toEmail}.`,
+      details: `Envoi email reset ignoré (RESEND_API_KEY et SMTP non configurés) pour ${toEmail}.`,
     });
     return false;
   }
@@ -484,6 +538,19 @@ export async function sendPasswordResetEmail(
 
     if (!res.ok) {
       const errorBody = await res.text();
+      // Repli SMTP avant d'abandonner : Resend refuse souvent silencieusement
+      // tant que le domaine d'envoi n'est pas vérifié (compte sans domaine).
+      const smtpSent = await sendViaSmtpFallback(toEmail, subject, html, text);
+      if (smtpSent) {
+        generateAuditLog({
+          action: 'EMAIL_PASSWORD_RESET_SENT_VIA_SMTP_FALLBACK',
+          userId,
+          ipAddress: ip,
+          status: 'SUCCESS',
+          details: `Email reset envoyé via repli SMTP (Resend refusé: ${res.status}) à ${toEmail}.`,
+        });
+        return true;
+      }
       generateAuditLog({
         action: 'EMAIL_PASSWORD_RESET_FAILED',
         userId,
