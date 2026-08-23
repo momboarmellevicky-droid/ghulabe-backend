@@ -62,6 +62,16 @@ export async function startScan(req: Request, res: Response): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || 'unknown-ip';
   const userId = req.user?.id;
 
+  // Détermine le plan réel de l'utilisateur connecté (source de vérité pour le
+  // verrouillage commercial). Un compte connecté mais sur le plan gratuit n'a
+  // pas plus de droits qu'un visiteur anonyme sur le détail des failles.
+  let userPlan: string | null = null;
+  if (userId) {
+    const { data: userRow } = await supabaseAdmin.from('users').select('plan').eq('id', userId).maybeSingle();
+    userPlan = userRow?.plan || null;
+  }
+  const isGardien = userPlan === 'gardien';
+
   if (!legalCheckboxAccepted) {
     generateAuditLog({
       action: 'SCAN_REJECTED_NO_LEGAL_CONSENT',
@@ -182,7 +192,7 @@ export async function startScan(req: Request, res: Response): Promise<void> {
         }
         // 3b. Insère le scan lié à ce domaine
         try {
-          reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `${domainId}-${Date.now()}`);
+          reportPdfUrl = await generateScanReportPdf(cleanUrl, score, facts, findings, `${domainId}-${Date.now()}`, !isGardien);
         } catch (pdfErr: any) {
           console.warn('[GHULABE Scan] Génération PDF échouée:', pdfErr.message);
           generateAuditLog({
@@ -378,10 +388,11 @@ export async function startScan(req: Request, res: Response): Promise<void> {
       details: `Scan terminé en ${durationSeconds}s. Score: ${score}/10. ${findings.length} faille(s) détectée(s). Persisté: ${persisted}.`,
     });
 
-    // Verrouillage commercial : un compte anonyme (pas Gardien) ne reçoit jamais le détail
-    // exploitable des failles (impact business, risque financier, correctif). Il reçoit
-    // uniquement le score + un compteur, avec un message d'upsell vers le plan Gardien (5000 FCFA).
-    const isLocked = !userId;
+    // Verrouillage commercial : seul un compte réellement sur le plan Gardien reçoit
+    // le détail exploitable des failles (impact business, risque financier, correctif).
+    // Un compte connecté mais gratuit est traité exactement comme un visiteur anonyme —
+    // c'est le plan payé qui débloque, pas la simple connexion.
+    const isLocked = !isGardien;
     const criticalCountResp = findings.filter((f) => f.severity === 'critique').length;
     const highCountResp = findings.filter((f) => f.severity === 'eleve').length;
     const lockedFindings = findings.map((f) => ({
@@ -497,6 +508,14 @@ export async function getScanReport(req: Request, res: Response): Promise<void> 
     const domainInfo = Array.isArray(scan.domains) ? scan.domains[0] : scan.domains;
     const findingsArr = Array.isArray(scan.findings) ? scan.findings : [];
 
+    // Même verrouillage commercial qu'au moment du scan : seul le plan Gardien
+    // donne accès au détail exploitable, même en relisant un rapport déjà généré.
+    const { data: userRow } = await supabaseAdmin.from('users').select('plan').eq('id', userId).maybeSingle();
+    const isGardien = userRow?.plan === 'gardien';
+    const responseFindings = isGardien
+      ? findingsArr
+      : findingsArr.map((f: any) => ({ id: f.id, severity: f.severity, category: f.category, title_fr: f.title_fr, title_en: f.title_en }));
+
     generateAuditLog({
       action: 'SCAN_REPORT_ACCESSED',
       userId,
@@ -510,8 +529,9 @@ export async function getScanReport(req: Request, res: Response): Promise<void> 
       id: scan.id,
       url: domainInfo?.url,
       score: scan.score,
-      report_pdf_url: scan.report_pdf_url,
-      findings: scan.findings,
+      report_pdf_url: isGardien ? scan.report_pdf_url : null,
+      locked: !isGardien,
+      findings: responseFindings,
       created_at: scan.created_at,
       ceoSection: {
         scoreLabel: `Score Global de Sécurité : ${scan.score} / 10`,
