@@ -8,6 +8,17 @@ import { detectNewFindings } from '../utils/findingsDiff';
 import { sendVulnerabilityAlertEmail } from '../services/emailService';
 import { sendWhatsAppAlert } from '../services/whatsappService';
 
+// Domaines de démonstration : leurs failles/incidents sont volontaires (pour
+// illustrer le tableau de bord) et ne doivent jamais déclencher de vraie
+// alerte email/WhatsApp vers l'utilisateur. Le scan, le score et le
+// heartbeat restent affichés normalement, seul l'envoi de notification est
+// coupé pour ces domaines.
+const DEMO_DOMAINS = ['ebanking-pme-africa.sn', 'store-dakar-express.com', 'assurances-libreville.ga'];
+
+function isDemoDomain(url: string): boolean {
+  return DEMO_DOMAINS.some((demo) => url.includes(demo));
+}
+
 /**
  * POST /api/cron/weekly-scan
  * Point d'entrée protégé par secret partagé (header x-cron-secret), appelé une
@@ -84,7 +95,16 @@ export async function runWeeklyMonitoring(req: Request, res: Response): Promise<
         const previousFindings = previousScan?.findings || [];
         const newFindings = detectNewFindings(previousFindings, findings);
 
-        if (newFindings.length > 0) {
+        if (newFindings.length > 0 && isDemoDomain(domain.url)) {
+          generateAuditLog({
+            action: 'WEEKLY_MONITORING_DEMO_ALERT_SKIPPED',
+            userId: owner?.id,
+            ipAddress: 'CRON_WEEKLY',
+            targetUrl: domain.url,
+            status: 'SUCCESS',
+            details: `Domaine de démo : score/scan mis à jour normalement, alerte email/WhatsApp volontairement non envoyée.`,
+          });
+        } else if (newFindings.length > 0) {
           const newCriticalCount = newFindings.filter((f) => f.severity === 'critique').length;
           const messageFr = `🔍 Surveillance hebdomadaire GHULABE : ${newFindings.length} nouvelle(s) faille(s) détectée(s) sur ${domain.url} (${newCriticalCount} critique(s)). Score actuel : ${score}/10.`;
           const messageEn = `🔍 GHULABE weekly monitoring: ${newFindings.length} new vulnerability(ies) found on ${domain.url} (${newCriticalCount} critical). Current score: ${score}/10.`;
@@ -237,6 +257,18 @@ export async function runQuickHeartbeatCron(req: Request, res: Response): Promis
             message_en: alert.messageEn,
             is_read: false,
           });
+
+          if (isDemoDomain(domain.url)) {
+            generateAuditLog({
+              action: 'QUICK_HEARTBEAT_DEMO_ALERT_SKIPPED',
+              userId: owner?.id,
+              ipAddress: 'CRON_HEARTBEAT',
+              targetUrl: domain.url,
+              status: 'SUCCESS',
+              details: `Domaine de démo : incident affiché normalement, alerte email/WhatsApp volontairement non envoyée.`,
+            });
+            continue;
+          }
 
           const emailSent = await sendVulnerabilityAlertEmail(
             owner.email,
