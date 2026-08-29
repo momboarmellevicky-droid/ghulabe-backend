@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '../config/supabase';
 import { decryptAES256, generateAuditLog } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
-import { sendPasswordResetEmail } from '../services/emailService';
+import { sendPasswordResetEmail, sendAdminRecruitmentAlertEmail } from '../services/emailService';
 import { isValidEmail } from '../utils/validators';
 
 const pending2FAChallenges = new Map<string, { userId: string; email: string; role: string; plan: string; otp: string; expiresAt: number; attempts: number }>();
@@ -92,6 +92,18 @@ export async function register(req: Request, res: Response): Promise<void> {
       status: 'SUCCESS',
       details: `Création de compte réussie (${email}) - Plan ${plan.toUpperCase()}`,
     });
+
+    // Alerte email admin claire et spécifique à CHAQUE nouvelle inscription
+    // (PME ou candidat développeur) — canal unique désormais (email), fiable
+    // et déjà opérationnel, contrairement à WhatsApp (sandbox non résolu).
+    const roleLabel = role === 'dev' ? 'Candidat développeur' : 'Client PME';
+    await sendAdminRecruitmentAlertEmail(
+      `🆕 Nouvelle inscription GHULABE — ${roleLabel}`,
+      email,
+      `Nom: ${name} | Pays: ${country} | Téléphone: ${phone} | Plan initial: ${plan.toUpperCase()}${role === 'dev' ? ` | Spécialités: ${(specialites || []).join(', ') || 'non renseigné'}` : ''}`,
+      'admin-notify',
+      ip
+    );
 
     res.status(201).json({
       message_fr: "Compte créé avec succès. Authentification 2FA obligatoire requise pour la connexion.",

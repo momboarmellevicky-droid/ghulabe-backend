@@ -325,7 +325,11 @@ export async function sendAdminRecruitmentAlertEmail(
     return false;
   }
 
-  const subject = `🔔 GHULABE Recrutement — ${eventLabel} (${candidateEmail})`;
+  // Sujet directement basé sur eventLabel (qui porte déjà l'emoji et la
+  // catégorie exacte : inscription, paiement, candidature, QCM...) — plus de
+  // préfixe générique "Recrutement" trompeur qui rendait tous les emails
+  // indistincts dans la boîte de réception.
+  const subject = `${eventLabel} — ${candidateEmail}`;
   const text = `${eventLabel}\nCandidat : ${candidateEmail}\n${detailsText}`;
   const html = `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;">
     <h2 style="color:#0066FF;">🔔 ${eventLabel}</h2>
