@@ -204,6 +204,28 @@ export const GhulabeBackend = {
     return data;
   },
 
+  // Paiement par carte bancaire internationale (Visa/Mastercard) via Stripe
+  // Checkout — pour les clients hors zone Mobile Money (Nigeria, UK, Canada,
+  // USA, etc.). Redirige vers une page de paiement hébergée par Stripe.
+  async createStripeCheckout(
+    params: { plan: 'gardien' | 'pentest_premium'; lang: 'fr' | 'en' },
+    token: string
+  ): Promise<{ success: boolean; url?: string; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors du paiement.');
+    }
+    return data;
+  },
+
   async checkPawaPayStatus(
     depositId: string,
     token: string

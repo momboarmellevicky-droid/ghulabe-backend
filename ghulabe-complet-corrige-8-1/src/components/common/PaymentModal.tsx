@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../../types';
 import { GhulabeBackend } from '../../services/apiClient';
 import { PAWAPAY_CFA_COUNTRIES } from '../../data/pawapayCountries';
-import { X, Smartphone, Loader2, CheckCircle2, AlertOctagon } from 'lucide-react';
+import { X, Smartphone, Loader2, CheckCircle2, AlertOctagon, CreditCard } from 'lucide-react';
 
 interface PaymentModalProps {
   lang: Language;
@@ -12,13 +12,15 @@ interface PaymentModalProps {
   onSuccess: (plan: 'gardien' | 'pentest_premium') => void;
 }
 
-const PLAN_INFO: Record<'gardien' | 'pentest_premium', { amount: number; label_fr: string; label_en: string }> = {
-  gardien: { amount: 5000, label_fr: 'Offre GARDIEN', label_en: 'GARDIEN plan' },
-  pentest_premium: { amount: 25000, label_fr: 'PENTEST PREMIUM', label_en: 'PENTEST PREMIUM' },
+const PLAN_INFO: Record<'gardien' | 'pentest_premium', { amount: number; amountUsd: number; label_fr: string; label_en: string }> = {
+  gardien: { amount: 5000, amountUsd: 9, label_fr: 'Offre GARDIEN', label_en: 'GARDIEN plan' },
+  pentest_premium: { amount: 25000, amountUsd: 42, label_fr: 'PENTEST PREMIUM', label_en: 'PENTEST PREMIUM' },
 };
 
 type Phase = 'form' | 'pending' | 'success' | 'failed';
-type Channel = 'gabon' | 'cfa_elargie';
+// 'card' = paiement international par carte bancaire (Stripe Checkout),
+// destiné aux clients hors zone Mobile Money (Nigeria, UK, Canada, USA, etc.)
+type Channel = 'gabon' | 'cfa_elargie' | 'card';
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, accessToken, onClose, onSuccess }) => {
   const [channel, setChannel] = useState<Channel>('gabon');
@@ -80,6 +82,22 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
     attemptsRef.current = 0;
 
     try {
+      if (channel === 'card') {
+        const result = await GhulabeBackend.createStripeCheckout({ plan: targetPlan, lang }, accessToken);
+
+        if (!result.success || !result.url) {
+          setPhase('failed');
+          setErrorMsg(lang === 'fr' ? result.message_fr : result.message_en);
+          return;
+        }
+
+        // Redirection vers la page de paiement sécurisée Stripe. Le retour
+        // (succès ou annulation) est géré par App.tsx via les paramètres
+        // d'URL stripe_success / stripe_canceled après redirection.
+        window.location.href = result.url;
+        return;
+      }
+
       if (channel === 'gabon') {
         const result = await GhulabeBackend.initiatePayment(
           {
@@ -156,7 +174,9 @@ return (
           {lang === 'fr' ? `Souscrire : ${plan.label_fr}` : `Subscribe: ${plan.label_en}`}
         </h3>
         <p className="text-sm text-gray-400 mb-4">
-          {plan.amount.toLocaleString('fr-FR')} FCFA
+          {channel === 'card'
+            ? `$${plan.amountUsd} USD`
+            : `${plan.amount.toLocaleString('fr-FR')} FCFA`}
         </p>
 
         {phase === 'form' && (
@@ -174,11 +194,27 @@ return (
                 onClick={() => setChannel('cfa_elargie')}
                 className={`flex-1 py-2.5 rounded-lg transition-all ${channel === 'cfa_elargie' ? 'bg-[#00FF88] text-[#0A0A0F]' : 'text-gray-400'}`}
               >
-                {lang === 'fr' ? 'Autre pays (zone CFA)' : 'Other country (CFA zone)'}
+                {lang === 'fr' ? 'Zone CFA' : 'CFA zone'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setChannel('card')}
+                className={`flex-1 py-2.5 rounded-lg transition-all flex items-center justify-center gap-1 ${channel === 'card' ? 'bg-white text-[#0A0A0F]' : 'text-gray-400'}`}
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                {lang === 'fr' ? 'Carte' : 'Card'}
               </button>
             </div>
 
-            {channel === 'gabon' ? (
+            {channel === 'card' && (
+              <p className="text-xs text-gray-400 font-mono leading-relaxed">
+                {lang === 'fr'
+                  ? 'Paiement international par carte Visa/Mastercard via Stripe. Vous serez redirigé vers une page de paiement sécurisée.'
+                  : 'International payment by Visa/Mastercard via Stripe. You will be redirected to a secure payment page.'}
+              </p>
+            )}
+
+            {channel !== 'card' && (channel === 'gabon' ? (
               <div className="flex bg-[#0D1B2A] p-1 rounded-xl border border-white/10 font-display font-bold text-xs">
                 <button
                   type="button"
@@ -230,24 +266,26 @@ return (
                   </select>
                 </div>
               </div>
-            )}
+            ))}
 
-            <div className="space-y-1">
-              <label className="font-mono text-gray-300 text-xs">
-                {lang === 'fr' ? 'Numéro Mobile Money' : 'Mobile Money number'} *
-              </label>
-              <div className="relative">
-                <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
-                <input
-                  type="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="074 XX XX XX"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
-                  required
-                />
+            {channel !== 'card' && (
+              <div className="space-y-1">
+                <label className="font-mono text-gray-300 text-xs">
+                  {lang === 'fr' ? 'Numéro Mobile Money' : 'Mobile Money number'} *
+                </label>
+                <div className="relative">
+                  <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0066FF]" />
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="074 XX XX XX"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#0066FF]/50 text-white font-mono text-xs focus:border-[#00FF88] focus:outline-none"
+                    required
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {errorMsg && (
               <div className="p-3 rounded-xl bg-[#FF2D2D]/15 border border-[#FF2D2D]/40 text-[#FF2D2D] text-xs font-bold flex items-center gap-2">

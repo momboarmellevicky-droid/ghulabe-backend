@@ -128,6 +128,25 @@ export const App: React.FC = () => {
     }
   }, [accessToken]);
 
+  // Retour de redirection Stripe Checkout (paiement carte internationale) : le vrai
+  // changement de plan est déjà fait côté serveur via le webhook Stripe (jamais on ne
+  // fait confiance à l'URL du navigateur pour ça) — ce bloc ne fait que refléter le
+  // succès dans l'état local de l'interface et nettoyer l'URL affichée.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeSuccess = params.get('stripe_success');
+    const stripePlan = params.get('plan');
+    const stripeCanceled = params.get('stripe_canceled');
+
+    if (stripeSuccess === '1' && (stripePlan === 'gardien' || stripePlan === 'pentest_premium')) {
+      setCurrentUser(prev => ({ ...prev, plan: stripePlan }));
+      setSessionUser(prev => (prev ? { ...prev, plan: stripePlan } : prev));
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (stripeCanceled === '1') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   // Appelée par AuthView après validation 2FA réussie : reçoit le vrai JWT backend + le user
   // (forme réduite BackendAuthUser) et construit un objet User complet pour le reste de l'app.
   const handleLoginSuccess = (token: string, user: BackendAuthUser) => {
