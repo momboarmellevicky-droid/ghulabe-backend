@@ -83,7 +83,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
 
     try {
       if (channel === 'card') {
-        const result = await GhulabeBackend.createStripeCheckout({ plan: targetPlan, lang }, accessToken);
+        const result = await GhulabeBackend.createFlutterwaveCheckout({ plan: targetPlan, lang }, accessToken);
 
         if (!result.success || !result.url) {
           setPhase('failed');
@@ -91,9 +91,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ lang, targetPlan, ac
           return;
         }
 
-        // Redirection vers la page de paiement sécurisée Stripe. Le retour
-        // (succès ou annulation) est géré par App.tsx via les paramètres
-        // d'URL stripe_success / stripe_canceled après redirection.
+        // Redirection vers la page de paiement sécurisée. Le retour (succès
+        // ou annulation) est géré par App.tsx via les paramètres d'URL
+        // renvoyés par Flutterwave après redirection.
         window.location.href = result.url;
         return;
       }
@@ -209,8 +209,8 @@ return (
             {channel === 'card' && (
               <p className="text-xs text-gray-400 font-mono leading-relaxed">
                 {lang === 'fr'
-                  ? 'Paiement international par carte Visa/Mastercard via Stripe. Vous serez redirigé vers une page de paiement sécurisée.'
-                  : 'International payment by Visa/Mastercard via Stripe. You will be redirected to a secure payment page.'}
+                  ? 'Paiement international par carte Visa/Mastercard. Vous serez redirigé vers une page de paiement sécurisée.'
+                  : 'International payment by Visa/Mastercard. You will be redirected to a secure payment page.'}
               </p>
             )}
 

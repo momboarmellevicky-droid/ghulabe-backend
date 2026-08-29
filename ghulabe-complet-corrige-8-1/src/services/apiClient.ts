@@ -204,14 +204,15 @@ export const GhulabeBackend = {
     return data;
   },
 
-  // Paiement par carte bancaire internationale (Visa/Mastercard) via Stripe
-  // Checkout — pour les clients hors zone Mobile Money (Nigeria, UK, Canada,
-  // USA, etc.). Redirige vers une page de paiement hébergée par Stripe.
-  async createStripeCheckout(
+  // Paiement par carte bancaire internationale (Visa/Mastercard) via
+  // Flutterwave Standard Checkout — pour les clients hors zone Mobile Money
+  // (Nigeria, UK, Canada, USA, etc.). Redirige vers une page de paiement
+  // hébergée par Flutterwave.
+  async createFlutterwaveCheckout(
     params: { plan: 'gardien' | 'pentest_premium'; lang: 'fr' | 'en' },
     token: string
   ): Promise<{ success: boolean; url?: string; message_fr: string; message_en: string }> {
-    const res = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
+    const res = await fetch(`${API_BASE_URL}/flutterwave/create-checkout-session`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -222,6 +223,24 @@ export const GhulabeBackend = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.error_fr || data.message_fr || 'Erreur lors du paiement.');
+    }
+    return data;
+  },
+
+  // Revérifie une transaction Flutterwave côté serveur juste après la
+  // redirection de retour — donne un retour immédiat, le webhook restant la
+  // source de vérité si l'utilisateur ferme l'onglet avant ce retour.
+  async verifyFlutterwavePayment(
+    transactionId: string,
+    token: string
+  ): Promise<{ success: boolean; status: string; plan?: 'gardien' | 'pentest_premium'; message_fr: string; message_en: string }> {
+    const res = await fetch(`${API_BASE_URL}/flutterwave/verify/${transactionId}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error_fr || data.message_fr || 'Erreur lors de la vérification du paiement.');
     }
     return data;
   },

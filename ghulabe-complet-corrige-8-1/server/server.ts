@@ -7,8 +7,7 @@ import certificationRoutes from './routes/certificationRoutes';
 import monitoringRoutes from './routes/monitoringRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import pawapayRoutes from './routes/pawapayRoutes';
-import stripeRoutes from './routes/stripeRoutes';
-import { stripeWebhook } from './controllers/stripeController';
+import flutterwaveRoutes from './routes/flutterwaveRoutes';
 import recruitmentRoutes from './routes/recruitmentRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { apiRateLimiter } from './middleware/rateLimiter';
@@ -22,11 +21,6 @@ const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || 'https://ghulabe.co
 // ============================================================================
 // 1. MIDDLEWARES DE SÉCURITÉ & EN-TÊTES HTTP STRICTS
 // ============================================================================
-// Webhook Stripe : DOIT être monté AVANT express.json(), car Stripe exige le
-// corps brut (raw bytes) de la requête pour vérifier sa signature — un corps
-// déjà parsé en JSON ne permettrait pas de le revérifier correctement.
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
-
 app.use(express.json({ limit: '5mb' })); // Relevé pour permettre l'upload réel des photos de vérification anti-triche (base64)
 
 app.use((req: Request, res: Response, next) => {
@@ -68,7 +62,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/public/certification', certificationRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/pawapay', pawapayRoutes);
-app.use('/api/stripe', stripeRoutes);
+app.use('/api/flutterwave', flutterwaveRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 

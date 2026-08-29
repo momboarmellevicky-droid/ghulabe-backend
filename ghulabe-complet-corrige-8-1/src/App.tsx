@@ -128,24 +128,31 @@ export const App: React.FC = () => {
     }
   }, [accessToken]);
 
-  // Retour de redirection Stripe Checkout (paiement carte internationale) : le vrai
-  // changement de plan est déjà fait côté serveur via le webhook Stripe (jamais on ne
-  // fait confiance à l'URL du navigateur pour ça) — ce bloc ne fait que refléter le
-  // succès dans l'état local de l'interface et nettoyer l'URL affichée.
+  // Retour de redirection Flutterwave (paiement carte internationale) : la
+  // transaction est revérifiée directement auprès de Flutterwave côté serveur
+  // (jamais on ne fait confiance aux paramètres d'URL seuls) via
+  // verifyFlutterwavePayment — c'est cette vérification, et le webhook en
+  // parallèle, qui déclenchent réellement le changement de plan en base.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const stripeSuccess = params.get('stripe_success');
-    const stripePlan = params.get('plan');
-    const stripeCanceled = params.get('stripe_canceled');
+    const flwStatus = params.get('status');
+    const flwTransactionId = params.get('transaction_id');
 
-    if (stripeSuccess === '1' && (stripePlan === 'gardien' || stripePlan === 'pentest_premium')) {
-      setCurrentUser(prev => ({ ...prev, plan: stripePlan }));
-      setSessionUser(prev => (prev ? { ...prev, plan: stripePlan } : prev));
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (stripeCanceled === '1') {
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
+    if (!flwStatus || !flwTransactionId) return;
+
+    window.history.replaceState({}, '', window.location.pathname);
+
+    if (flwStatus !== 'successful' || !accessToken) return;
+
+    GhulabeBackend.verifyFlutterwavePayment(flwTransactionId, accessToken)
+      .then((result) => {
+        if (result.success && result.plan) {
+          setCurrentUser(prev => ({ ...prev, plan: result.plan as 'gardien' | 'pentest_premium' }));
+          setSessionUser(prev => (prev ? { ...prev, plan: result.plan as 'gardien' | 'pentest_premium' } : prev));
+        }
+      })
+      .catch((err) => console.warn('[GHULABE Flutterwave] Vérification du paiement échouée:', err.message));
+  }, [accessToken]);
 
   // Appelée par AuthView après validation 2FA réussie : reçoit le vrai JWT backend + le user
   // (forme réduite BackendAuthUser) et construit un objet User complet pour le reste de l'app.
