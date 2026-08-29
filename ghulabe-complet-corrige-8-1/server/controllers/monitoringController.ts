@@ -13,7 +13,7 @@ import { sendWhatsAppAlert } from '../services/whatsappService';
 // alerte email/WhatsApp vers l'utilisateur. Le scan, le score et le
 // heartbeat restent affichés normalement, seul l'envoi de notification est
 // coupé pour ces domaines.
-const DEMO_DOMAINS = ['ebanking-pme-africa.sn', 'store-dakar-express.com', 'assurances-libreville.ga'];
+const DEMO_DOMAINS = ['ebanking-pme-africa.sn', 'store-dakar-express.com', 'assurances-libreville.ga', 'exemple.com', 'example.com'];
 
 function isDemoDomain(url: string): boolean {
   return DEMO_DOMAINS.some((demo) => url.includes(demo));
