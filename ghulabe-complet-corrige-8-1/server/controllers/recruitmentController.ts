@@ -206,8 +206,32 @@ export async function notifyTestCompleted(req: Request, res: Response): Promise<
       })
       .eq('id', candidate.id);
 
+    // Liens directs vers les photos d'identité et de selfie (48h, largement
+    // suffisant pour une revue) : Amy vérifie le document directement depuis
+    // l'email, sans avoir besoin d'ouvrir le dashboard admin séparément.
+    const { data: photos } = await supabaseAdmin
+      .from('recruit_verification_photos')
+      .select('kind, storage_path, created_at')
+      .eq('candidate_email', email)
+      .in('kind', ['id_document', 'liveness'])
+      .order('created_at', { ascending: true });
+
+    const photoLinks: string[] = [];
+    for (const photo of photos || []) {
+      const { data: signed } = await supabaseAdmin.storage
+        .from(VERIFICATION_BUCKET)
+        .createSignedUrl(photo.storage_path, 48 * 3600);
+      if (signed?.signedUrl) {
+        const label = photo.kind === 'id_document' ? "Pièce d'identité" : 'Selfie';
+        photoLinks.push(`${label} : ${signed.signedUrl}`);
+      }
+    }
+    const photosText = photoLinks.length > 0
+      ? photoLinks.join(' | ')
+      : 'Documents reçus mais liens indisponibles (voir dashboard).';
+
     const BACKEND_URL = process.env.BACKEND_URL || 'https://ghulabe-backend-1.onrender.com';
-    const summary = `Pays: ${candidate.country || 'n/a'} | Ville: ${candidate.city || 'n/a'} | Spécialités: ${(candidate.specialites || []).join(', ') || 'n/a'} | Tarif: ${candidate.rate_fcfa ? candidate.rate_fcfa + ' FCFA' : 'n/a'} | Portfolio: ${candidate.portfolio_url || 'n/a'} | Score QCM: ${scorePercentage}%${suspicious ? ' (⚠️ 100% — à vérifier)' : ''} | Documents identité+selfie : reçus (voir dashboard pour les consulter).`;
+    const summary = `Pays: ${candidate.country || 'n/a'} | Ville: ${candidate.city || 'n/a'} | Spécialités: ${(candidate.specialites || []).join(', ') || 'n/a'} | Tarif: ${candidate.rate_fcfa ? candidate.rate_fcfa + ' FCFA' : 'n/a'} | Portfolio: ${candidate.portfolio_url || 'n/a'} | Score QCM: ${scorePercentage}%${suspicious ? ' (⚠️ 100% — à vérifier)' : ''}\n\n${photosText}\n(Liens valables 48h)`;
 
     await sendCertificationReadyEmail(
       email,
