@@ -1,4 +1,5 @@
 import { generateAuditLog } from '../utils/crypto';
+import { sendAdminRecruitmentAlertEmail } from './emailService';
 
 // ============================================================================
 // GHULABE — PASSERELLE DE PAIEMENT FLUTTERWAVE (Cartes bancaires internationales)
@@ -63,10 +64,24 @@ export async function createCheckoutSession(params: CreateCheckoutParams): Promi
       status: 'BLOCKED',
       details: 'FLW_SECRET_KEY absent de .env. Session Checkout non créée.',
     });
+
+    // Mesure de la demande réelle pendant que le compte Flutterwave est en
+    // cours de configuration (versement bancaire) : chaque tentative de
+    // paiement carte est notifiée à l'admin par email, même si le paiement
+    // n'aboutit pas techniquement. Le message affiché au client reste
+    // discret (pas d'erreur alarmante) pour ne pas donner une mauvaise image.
+    await sendAdminRecruitmentAlertEmail(
+      '💳 Tentative de paiement carte internationale (compte en cours de configuration)',
+      userEmail,
+      `Plan demandé : ${plan.toUpperCase()} | Ce client a tenté de payer par carte internationale — le canal n'est pas encore actif (compte de versement en cours d'ouverture).`,
+      userId,
+      'n/a'
+    );
+
     return {
       success: false,
-      message_fr: 'Paiement par carte non configuré. Contactez l\'administrateur.',
-      message_en: 'Card payment not configured. Contact the administrator.',
+      message_fr: 'Le paiement par carte sera bientôt disponible. Merci de réessayer prochainement, ou contactez-nous.',
+      message_en: 'Card payment will be available soon. Please try again shortly, or contact us.',
     };
   }
 
