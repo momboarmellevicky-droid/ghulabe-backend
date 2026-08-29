@@ -302,10 +302,96 @@ export async function sendScanReportEmail(
   }
         }
 /**
- * Alerte admin (Mombo Armelle Vicky) envoyée en temps réel à chaque mouvement
- * du parcours recrutement développeur : upload document identité, selfie
- * liveness, ou fin de test QCM. Destinée à ADMIN_EMAIL, pas au candidat.
+ * Email récapitulatif final envoyé à l'admin dès qu'un candidat développeur a
+ * TOUT terminé (pièce d'identité + selfie + QCM) : contient les infos du
+ * candidat, ses documents (liens signés valables 1h), le score QCM, et DEUX
+ * boutons — "Certifier" / "Rejeter" — qui déclenchent la décision en un clic
+ * sans passer par le dashboard. Chaque bouton pointe vers un jeton aléatoire
+ * à usage unique, généré et stocké juste avant l'envoi de cet email.
  */
+export async function sendCertificationReadyEmail(
+  candidateEmail: string,
+  candidateName: string,
+  detailsText: string,
+  approveUrl: string,
+  rejectUrl: string,
+  userId: string,
+  ip: string
+): Promise<boolean> {
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+  if (!RESEND_API_KEY || !ADMIN_EMAIL) {
+    generateAuditLog({
+      action: 'EMAIL_CERTIFICATION_READY_SKIPPED',
+      userId,
+      ipAddress: ip,
+      status: 'BLOCKED',
+      details: `Email de certification ignoré (RESEND_API_KEY ou ADMIN_EMAIL non configuré) pour ${candidateEmail}.`,
+    });
+    return false;
+  }
+
+  const subject = `🎓 GHULABE — ${candidateName || candidateEmail} a terminé son parcours (identité + QCM) — décision requise`;
+  const text = `${candidateName || candidateEmail}\n${detailsText}\n\nCertifier : ${approveUrl}\nRejeter : ${rejectUrl}`;
+  const html = `<div style="font-family:sans-serif;background:#0A0A0F;color:#F3F4F6;padding:24px;border-radius:8px;max-width:560px;">
+    <h2 style="color:#0066FF;">🎓 Candidat prêt pour décision</h2>
+    <p><strong>${candidateName || 'Candidat'}</strong> (${candidateEmail})</p>
+    <p style="color:#9CA3AF;white-space:pre-line;">${detailsText}</p>
+    <div style="margin-top:24px;">
+      <a href="${approveUrl}" style="display:inline-block;background:#00FF88;color:#0A0A0F;font-weight:bold;padding:14px 28px;border-radius:8px;text-decoration:none;margin-right:12px;">✅ Certifier ce développeur</a>
+      <a href="${rejectUrl}" style="display:inline-block;background:#FF4444;color:#FFFFFF;font-weight:bold;padding:14px 28px;border-radius:8px;text-decoration:none;">❌ Rejeter</a>
+    </div>
+    <p style="color:#6B7280;font-size:0.85em;margin-top:20px;">Ces liens expirent dans 7 jours et ne fonctionnent qu'une seule fois. Pour revoir les documents en détail, utilisez le dashboard admin.</p>
+  </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+        to: [ADMIN_EMAIL],
+        subject,
+        html,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      generateAuditLog({
+        action: 'EMAIL_CERTIFICATION_READY_FAILED',
+        userId,
+        ipAddress: ip,
+        status: 'FAILED',
+        details: `Échec envoi email certification pour ${candidateEmail} : ${res.status} ${errorBody}`,
+      });
+      return false;
+    }
+
+    generateAuditLog({
+      action: 'EMAIL_CERTIFICATION_READY_SENT',
+      userId,
+      ipAddress: ip,
+      status: 'SUCCESS',
+      details: `Email de certification (avec boutons) envoyé pour ${candidateEmail}.`,
+    });
+    return true;
+  } catch (err: any) {
+    generateAuditLog({
+      action: 'EMAIL_CERTIFICATION_READY_FAILED',
+      userId,
+      ipAddress: ip,
+      status: 'FAILED',
+      details: `Erreur critique email certification pour ${candidateEmail} : ${err.message}`,
+    });
+    return false;
+  }
+}
+
+
 export async function sendAdminRecruitmentAlertEmail(
   eventLabel: string,
   candidateEmail: string,

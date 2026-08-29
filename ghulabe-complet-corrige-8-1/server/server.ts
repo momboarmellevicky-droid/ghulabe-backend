@@ -8,6 +8,7 @@ import monitoringRoutes from './routes/monitoringRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import pawapayRoutes from './routes/pawapayRoutes';
 import flutterwaveRoutes from './routes/flutterwaveRoutes';
+import adminEmailActionRoutes from './routes/adminEmailActionRoutes';
 import recruitmentRoutes from './routes/recruitmentRoutes';
 import adminRoutes from './routes/adminRoutes';
 import { apiRateLimiter } from './middleware/rateLimiter';
@@ -63,6 +64,7 @@ app.use('/api/public/certification', certificationRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/pawapay', pawapayRoutes);
 app.use('/api/flutterwave', flutterwaveRoutes);
+app.use('/api/admin-actions', adminEmailActionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 

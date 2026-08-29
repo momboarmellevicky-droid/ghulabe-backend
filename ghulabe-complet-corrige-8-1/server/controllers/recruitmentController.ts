@@ -53,7 +53,7 @@ export async function getRecruitmentPaymentStatus(req: Request, res: Response): 
 
 import { supabaseAdmin } from '../config/supabase';
 import crypto from 'crypto';
-import { sendAdminRecruitmentAlertEmail } from '../services/emailService';
+import { sendAdminRecruitmentAlertEmail, sendCertificationReadyEmail } from '../services/emailService';
 import { sendWhatsAppAlert } from '../services/whatsappService';
 
 // Alerte temps réel vers TON email + TON WhatsApp (pas ceux du candidat) —
@@ -175,6 +175,50 @@ export async function notifyTestCompleted(req: Request, res: Response): Promise<
   const details = `Score : ${scorePercentage}%.` + (suspicious ? ' ⚠️ Score parfait — à vérifier manuellement.' : '');
 
   await notifyAdmin(label, email, details, req.ip || 'unknown-ip');
+
+  // Le QCM est la dernière étape du parcours (info → paiement → biométrie →
+  // QCM) : si l'identité et le selfie ont bien été uploadés avant, le
+  // candidat est désormais prêt pour une décision. On envoie l'email
+  // récapitulatif avec les deux boutons de décision en un clic.
+  const { data: candidate } = await supabaseAdmin
+    .from('users')
+    .select('id, name, country, city, specialites, rate_fcfa, portfolio_url')
+    .eq('email', email)
+    .eq('role', 'dev')
+    .maybeSingle();
+
+  const { count: photoCount } = await supabaseAdmin
+    .from('recruit_verification_photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('candidate_email', email);
+
+  if (candidate && photoCount && photoCount > 0) {
+    const approveToken = crypto.randomBytes(32).toString('hex');
+    const rejectToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    await supabaseAdmin
+      .from('users')
+      .update({
+        admin_approve_token: approveToken,
+        admin_reject_token: rejectToken,
+        admin_action_token_expires_at: expiresAt,
+      })
+      .eq('id', candidate.id);
+
+    const BACKEND_URL = process.env.BACKEND_URL || 'https://ghulabe-backend-1.onrender.com';
+    const summary = `Pays: ${candidate.country || 'n/a'} | Ville: ${candidate.city || 'n/a'} | Spécialités: ${(candidate.specialites || []).join(', ') || 'n/a'} | Tarif: ${candidate.rate_fcfa ? candidate.rate_fcfa + ' FCFA' : 'n/a'} | Portfolio: ${candidate.portfolio_url || 'n/a'} | Score QCM: ${scorePercentage}%${suspicious ? ' (⚠️ 100% — à vérifier)' : ''} | Documents identité+selfie : reçus (voir dashboard pour les consulter).`;
+
+    await sendCertificationReadyEmail(
+      email,
+      candidate.name || '',
+      summary,
+      `${BACKEND_URL}/api/admin-actions/certify-developer?token=${approveToken}`,
+      `${BACKEND_URL}/api/admin-actions/reject-developer?token=${rejectToken}`,
+      'admin-notify',
+      req.ip || 'unknown-ip'
+    );
+  }
 }
 
 export async function getVerificationPhotos(req: Request, res: Response): Promise<void> {
