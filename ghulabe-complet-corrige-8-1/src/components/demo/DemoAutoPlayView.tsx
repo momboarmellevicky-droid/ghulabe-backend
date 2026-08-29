@@ -255,11 +255,21 @@ export const DemoAutoPlayView: React.FC<DemoAutoPlayViewProps> = ({ lang, onClos
             </div>
 
             {subStep >= 1 && (
-              <div className="glass-card rounded-2xl border border-[#00FF88]/40 p-4 flex items-center gap-3 animate-[fadeIn_0.4s_ease]">
-                <CreditCard className="w-5 h-5 text-[#00FF88] shrink-0" />
-                <div>
-                  <p className="text-white text-xs font-bold">{t('Paiement Mobile Money — 5000 FCFA', 'Mobile Money payment — 5000 FCFA')}</p>
-                  <p className="text-gray-400 text-[10px]">Airtel Money / Moov Money</p>
+              <div className="grid grid-cols-1 gap-2 animate-[fadeIn_0.4s_ease]">
+                <div className="glass-card rounded-2xl border border-[#00FF88]/40 p-4 flex items-center gap-3">
+                  <CreditCard className="w-5 h-5 text-[#00FF88] shrink-0" />
+                  <div>
+                    <p className="text-white text-xs font-bold">{t('Mobile Money — 5000 FCFA', 'Mobile Money — 5000 FCFA')}</p>
+                    <p className="text-gray-400 text-[10px]">Airtel Money / Moov Money — {t('Afrique', 'Africa')}</p>
+                  </div>
+                </div>
+                <div className="text-center text-gray-500 text-[10px] font-mono">{t('— ou —', '— or —')}</div>
+                <div className="glass-card rounded-2xl border border-[#0066FF]/40 p-4 flex items-center gap-3">
+                  <Globe className="w-5 h-5 text-[#0066FF] shrink-0" />
+                  <div>
+                    <p className="text-white text-xs font-bold">{t('Carte bancaire — 9 $US', 'Card payment — $9 USD')}</p>
+                    <p className="text-gray-400 text-[10px]">Visa / Mastercard — {t('International', 'International')}</p>
+                  </div>
                 </div>
               </div>
             )}
