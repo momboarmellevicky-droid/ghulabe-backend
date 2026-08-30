@@ -310,7 +310,20 @@ function checkPort(hostname: string, port: number): Promise<boolean> {
   });
 }
 
+// Port de contrôle improbable : sert à détecter une infrastructure partagée
+// (ex: proxy/edge Render) qui accepte la poignée de main TCP sur des ports
+// non réellement liés au service, ce qui donnerait de faux positifs.
+const CONTROL_PORT = 54329;
+
 export async function scanCommonPorts(hostname: string): Promise<OpenPort[]> {
+  const controlOpen = await checkPort(hostname, CONTROL_PORT);
+
+  if (controlOpen) {
+    // L'hôte répond "ouvert" même sur un port de contrôle improbable :
+    // signal non fiable, on ne remonte aucun port pour éviter les faux positifs.
+    return [];
+  }
+
   const results = await Promise.allSettled(
     COMMON_PORTS.map(async ({ port, service }) => ({ port, service, open: await checkPort(hostname, port) }))
   );
