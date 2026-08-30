@@ -233,6 +233,21 @@ export async function scanExposedFiles(hostname: string): Promise<string[]> {
   ];
   const exposed: string[] = [];
 
+  // Détection des faux positifs causés par les sites SPA (React/Vue/Angular)
+  // configurés avec une règle de redirection catch-all (ex: /* → /index.html
+  // sur Render, Netlify, Vercel) : dans ce cas, TOUTE URL renvoie 200 avec le
+  // contenu de la page d'accueil, y compris une URL totalement inventée —
+  // donc chaque "fichier sensible" testé serait signalé à tort comme exposé.
+  // On teste d'abord une URL aléatoire garantie inexistante : si elle répond
+  // 200 elle aussi, on compare le corps de chaque fichier testé au corps de
+  // cette URL témoin, et on ignore les correspondances identiques (30 août
+  // 2026, faux positif confirmé sur un site React généré par MÉNU : 23
+  // "fichiers exposés" qui n'étaient en réalité que la page d'accueil).
+  const canaryPath = `ghulabe-canary-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const canaryRes = await fetchWithTimeout(`https://${hostname}/${canaryPath}`, FETCH_TIMEOUT_MS);
+  const canaryBody = canaryRes && canaryRes.status === 200 ? await canaryRes.text().catch(() => null) : null;
+  const isSpaFallbackSuspected = canaryRes !== null && canaryRes.status === 200;
+
   const checks = filesToCheck.map(async (file) => {
     const res = await fetchWithTimeout(`https://${hostname}/${file}`, FETCH_TIMEOUT_MS);
     // On ne considère exposé que les réponses 200 avec un minimum de contenu
@@ -240,6 +255,12 @@ export async function scanExposedFiles(hostname: string): Promise<string[]> {
     if (res && res.status === 200) {
       const contentLength = res.headers.get('content-length');
       if (!contentLength || parseInt(contentLength, 10) > 0) {
+        if (isSpaFallbackSuspected && canaryBody !== null) {
+          const fileBody = await res.text().catch(() => null);
+          // Corps identique à la page témoin inexistante = faux positif SPA,
+          // on ignore ce résultat plutôt que de signaler un fichier fantôme.
+          if (fileBody === canaryBody) return;
+        }
         exposed.push(file);
       }
     }
