@@ -316,6 +316,15 @@ function checkPort(hostname: string, port: number): Promise<boolean> {
 const CONTROL_PORT = 54329;
 
 export async function scanCommonPorts(hostname: string): Promise<OpenPort[]> {
+  // Render (*.onrender.com) ne route publiquement que 80/443 quel que soit
+  // le port interne de l'app (PORT env var) : un port "ouvert" détecté sur
+  // ce type d'hôte reflète l'infrastructure partagée de Render, pas une
+  // mauvaise configuration du client. On ignore le scan de ports pour ces
+  // hôtes afin d'éviter les faux positifs non actionnables.
+  if (hostname.endsWith('.onrender.com')) {
+    return [];
+  }
+
   const controlOpen = await checkPort(hostname, CONTROL_PORT);
 
   if (controlOpen) {
